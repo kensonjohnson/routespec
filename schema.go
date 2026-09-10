@@ -11,11 +11,12 @@ import (
 
 var timeType = reflect.TypeFor[time.Time]()
 
-func buildDocument(info Info, operations map[routeKey]Operation) Document {
+func buildDocument(info Info, operations map[routeKey]Operation, overrides map[reflect.Type]Schema) Document {
 	builder := schemaBuilder{
 		components: make(map[string]Schema),
 		states:     make(map[reflect.Type]schemaState),
 		names:      make(map[string]reflect.Type),
+		overrides:  overrides,
 	}
 	document := Document{
 		OpenAPI: "3.1.0",
@@ -81,6 +82,7 @@ type schemaBuilder struct {
 	components map[string]Schema
 	states     map[reflect.Type]schemaState
 	names      map[string]reflect.Type
+	overrides  map[reflect.Type]Schema
 }
 
 func (builder *schemaBuilder) operation(path string, source Operation) DocumentOperation {
@@ -135,7 +137,7 @@ func (builder *schemaBuilder) parameters(model ParameterModel) []Parameter {
 	if model.typeOf == nil {
 		return nil
 	}
-	fields := jsonFields(deref(model.typeOf))
+	fields := parameterFields(deref(model.typeOf))
 	names := make([]string, 0, len(fields))
 	for name := range fields {
 		names = append(names, name)
@@ -144,11 +146,14 @@ func (builder *schemaBuilder) parameters(model ParameterModel) []Parameter {
 
 	parameters := make([]Parameter, 0, len(names))
 	for _, name := range names {
+		field := fields[name]
+		schema := field.Annotation.apply(builder.schema(field.Type), field.Field, true)
 		parameters = append(parameters, Parameter{
-			Name:     name,
-			In:       string(model.location),
-			Required: model.location == pathParameter,
-			Schema:   builder.schema(fields[name].Type),
+			Name:        name,
+			In:          string(model.location),
+			Description: field.Annotation.description,
+			Required:    model.location == pathParameter || field.Annotation.required,
+			Schema:      schema,
 		})
 	}
 	return parameters
@@ -156,6 +161,9 @@ func (builder *schemaBuilder) parameters(model ParameterModel) []Parameter {
 
 func (builder *schemaBuilder) schema(t reflect.Type) Schema {
 	t = deref(t)
+	if override, exists := builder.overrides[t]; exists {
+		return override
+	}
 	if t == timeType {
 		return Schema{Type: "string", Format: "date-time"}
 	}
@@ -213,10 +221,15 @@ func (builder *schemaBuilder) schema(t reflect.Type) Schema {
 func (builder *schemaBuilder) objectSchema(t reflect.Type) Schema {
 	fields := jsonFields(t)
 	properties := make(map[string]Schema, len(fields))
+	required := make([]string, 0)
 	for name, field := range fields {
-		properties[name] = builder.schema(field.Type)
+		properties[name] = field.Annotation.apply(builder.schema(field.Type), field.Field, false)
+		if field.Annotation.required {
+			required = append(required, name)
+		}
 	}
-	return Schema{Type: "object", Properties: properties}
+	sort.Strings(required)
+	return Schema{Type: "object", Properties: properties, Required: required}
 }
 
 func componentName(t reflect.Type) string {
@@ -238,7 +251,9 @@ func deref(t reflect.Type) reflect.Type {
 }
 
 type jsonField struct {
-	Type reflect.Type
+	Field      reflect.StructField
+	Type       reflect.Type
+	Annotation annotation
 }
 
 func jsonFields(t reflect.Type) map[string]jsonField {
@@ -251,7 +266,7 @@ func jsonFields(t reflect.Type) map[string]jsonField {
 		if !field.IsExported() {
 			continue
 		}
-		name, options := jsonName(field)
+		name, _ := jsonName(field)
 		if name == "-" {
 			continue
 		}
@@ -261,10 +276,29 @@ func jsonFields(t reflect.Type) map[string]jsonField {
 		if _, exists := fields[name]; exists {
 			panic(fmt.Sprintf("routespec: duplicate JSON field name %q in %s", name, t))
 		}
-		_ = options
-		fields[name] = jsonField{Type: field.Type}
+		fields[name] = jsonField{
+			Field:      field,
+			Type:       field.Type,
+			Annotation: parseAnnotation(field),
+		}
 	}
 	return fields
+}
+
+func parameterFields(t reflect.Type) map[string]jsonField {
+	fields := jsonFields(t)
+	parameters := make(map[string]jsonField, len(fields))
+	for jsonName, field := range fields {
+		name := jsonName
+		if field.Annotation.name != "" {
+			name = field.Annotation.name
+		}
+		if _, exists := parameters[name]; exists {
+			panic(fmt.Sprintf("routespec: duplicate parameter name %q in %s", name, t))
+		}
+		parameters[name] = field
+	}
+	return parameters
 }
 
 func jsonName(field reflect.StructField) (string, []string) {

@@ -16,6 +16,7 @@ type API struct {
 
 	mu         sync.RWMutex
 	operations map[routeKey]Operation
+	overrides  map[reflect.Type]Schema
 }
 
 type routeKey struct {
@@ -23,8 +24,19 @@ type routeKey struct {
 	path   string
 }
 
+// Option configures an API registry.
+type Option func(*API)
+
+// WithSchemaOverride uses schema whenever T appears in a generated operation.
+// It provides an escape hatch for schemas that field tags cannot express.
+func WithSchemaOverride[T any](schema Schema) Option {
+	return func(api *API) {
+		api.overrides[deref(typeOf[T]())] = schema
+	}
+}
+
 // New creates an API registry that registers routes on mux.
-func New(mux *http.ServeMux, info Info) *API {
+func New(mux *http.ServeMux, info Info, options ...Option) *API {
 	if mux == nil {
 		panic("routespec: nil http.ServeMux")
 	}
@@ -35,11 +47,19 @@ func New(mux *http.ServeMux, info Info) *API {
 		panic("routespec: document version is required")
 	}
 
-	return &API{
+	api := &API{
 		mux:        mux,
 		info:       info,
 		operations: make(map[routeKey]Operation),
+		overrides:  make(map[reflect.Type]Schema),
 	}
+	for _, option := range options {
+		if option == nil {
+			panic("routespec: nil option")
+		}
+		option(api)
+	}
+	return api
 }
 
 // Register registers handler and records operation. It panics when route or
@@ -79,7 +99,7 @@ func (api *API) register(method, path string, operation Operation, register func
 		candidate[registeredKey] = registeredOperation
 	}
 	candidate[key] = operation
-	validateDocument(method, path, api.info, candidate)
+	validateDocument(method, path, api.info, candidate, api.overrides)
 
 	pattern := method + " " + path
 	registerWithContext(method, path, func() {
@@ -88,13 +108,13 @@ func (api *API) register(method, path string, operation Operation, register func
 	api.operations[key] = operation
 }
 
-func validateDocument(method, path string, info Info, operations map[routeKey]Operation) {
+func validateDocument(method, path string, info Info, operations map[routeKey]Operation, overrides map[reflect.Type]Schema) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			panicRoute(method, path, fmt.Sprint(recovered))
 		}
 	}()
-	_ = buildDocument(info, operations)
+	_ = buildDocument(info, operations, overrides)
 }
 
 func registerWithContext(method, path string, register func()) {
@@ -140,7 +160,7 @@ func validateOperation(method, path string, operation Operation) {
 		panicRoute(method, path, "path parameters require a Path model")
 	}
 	if operation.Path.typeOf != nil {
-		fields := jsonFields(deref(operation.Path.typeOf))
+		fields := parameterFields(deref(operation.Path.typeOf))
 		if len(fields) != len(pathParameters) {
 			panicRoute(method, path, "Path model fields must match path parameters")
 		}
@@ -194,9 +214,13 @@ func (api *API) Document() Document {
 	for key, operation := range api.operations {
 		operations[key] = operation
 	}
+	overrides := make(map[reflect.Type]Schema, len(api.overrides))
+	for t, schema := range api.overrides {
+		overrides[t] = schema
+	}
 	api.mu.RUnlock()
 
-	return buildDocument(api.info, operations)
+	return buildDocument(api.info, operations, overrides)
 }
 
 // JSON returns a pretty-printed OpenAPI document followed by a newline.
