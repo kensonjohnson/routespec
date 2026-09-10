@@ -47,6 +47,68 @@ api.RegisterFunc(http.MethodGet, "/widgets/:id", getWidget, routespec.Operation{
 
 The adapter's `Register` accepts `http.Handler`. Its `RegisterFunc` accepts `httprouter.Handle`, including its `httprouter.Params` argument. It registers the native `:id` path with httprouter and emits `/widgets/{id}` in OpenAPI. Catch-all routes such as `/*path` are rejected because their multi-segment behavior cannot be represented precisely by an OpenAPI path template.
 
+## Export a static spec
+
+Keep route setup in an application function that both the server and exporter call. For a ServeMux application, that function can return the registry it creates:
+
+```go
+// package api
+func NewAPI(mux *http.ServeMux) *routespec.API {
+    api := routespec.New(mux, routespec.Info{
+        Title:   "Widgets API",
+        Version: "1.0.0",
+    })
+    api.RegisterFunc(http.MethodPost, "/widgets/{id}", createWidget, createWidgetOperation)
+    return api
+}
+```
+
+An application-owned `cmd/openapi` program writes the deterministic JSON to a checked-in file. Replace `example.com/widgets` with the application's module path.
+
+```go
+// cmd/openapi/main.go
+package main
+
+import (
+    "flag"
+    "log"
+    "net/http"
+    "os"
+
+    "example.com/widgets/api"
+)
+
+func main() {
+    output := flag.String("output", "openapi.json", "OpenAPI output path")
+    flag.Parse()
+
+    document, err := api.NewAPI(http.NewServeMux()).JSON()
+    if err != nil {
+        log.Fatal(err)
+    }
+    if err := os.WriteFile(*output, document, 0o644); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+For httprouter, make the shared setup function construct `routespec.NewHTTPRouter` instead. Both registries expose `JSON()`, so the exporter follows the same pattern.
+
+`go generate` can make the command easy to find. Put this in a Go file under `api/`:
+
+```go
+//go:generate go run ../cmd/openapi -output ../openapi.json
+```
+
+Check the generated file in. CI can regenerate it and fail when the document changed:
+
+```sh
+go generate ./...
+git diff --exit-code -- openapi.json
+```
+
+Routespec does not provide an export CLI. The application owns route construction and chooses where its checked-in document lives.
+
 ## DTOs and annotations
 
 `json` tags determine body and response property names. `Path[T]` and `Query[T]` use the same names by default.
