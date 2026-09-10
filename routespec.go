@@ -40,6 +40,12 @@ func New(mux *http.ServeMux, info Info, options ...Option) *API {
 	if mux == nil {
 		panic("routespec: nil http.ServeMux")
 	}
+	api := newAPI(info, options...)
+	api.mux = mux
+	return api
+}
+
+func newAPI(info Info, options ...Option) *API {
 	if info.Title == "" {
 		panic("routespec: document title is required")
 	}
@@ -48,7 +54,6 @@ func New(mux *http.ServeMux, info Info, options ...Option) *API {
 	}
 
 	api := &API{
-		mux:        mux,
 		info:       info,
 		operations: make(map[routeKey]Operation),
 		overrides:  make(map[reflect.Type]Schema),
@@ -66,6 +71,9 @@ func New(mux *http.ServeMux, info Info, options ...Option) *API {
 // operation metadata is invalid because registration happens at application
 // startup, like http.ServeMux.Handle.
 func (api *API) Register(method, path string, handler http.Handler, operation Operation) {
+	if api.mux == nil {
+		panic("routespec: API has no http.ServeMux")
+	}
 	if handler == nil {
 		panicRoute(method, path, "nil handler")
 	}
