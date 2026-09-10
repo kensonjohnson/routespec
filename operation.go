@@ -4,9 +4,20 @@ import "reflect"
 
 // Info describes an API document.
 type Info struct {
-	Title       string
-	Version     string
-	Description string
+	Title           string
+	Version         string
+	Description     string
+	SecuritySchemes map[string]SecurityScheme
+}
+
+// SecurityScheme describes a reusable OpenAPI security scheme.
+type SecurityScheme struct {
+	Type         string `json:"type"`
+	Description  string `json:"description,omitempty"`
+	Name         string `json:"name,omitempty"`
+	In           string `json:"in,omitempty"`
+	Scheme       string `json:"scheme,omitempty"`
+	BearerFormat string `json:"bearerFormat,omitempty"`
 }
 
 // Operation describes one HTTP operation. Request, Path, Query, and Responses

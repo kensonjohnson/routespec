@@ -45,6 +45,17 @@ func New(mux *http.ServeMux, info Info, options ...Option) *API {
 	return api
 }
 
+func cloneInfo(info Info) Info {
+	clone := info
+	if len(info.SecuritySchemes) > 0 {
+		clone.SecuritySchemes = make(map[string]SecurityScheme, len(info.SecuritySchemes))
+		for name, scheme := range info.SecuritySchemes {
+			clone.SecuritySchemes[name] = scheme
+		}
+	}
+	return clone
+}
+
 func newAPI(info Info, options ...Option) *API {
 	if info.Title == "" {
 		panic("routespec: document title is required")
@@ -52,9 +63,17 @@ func newAPI(info Info, options ...Option) *API {
 	if info.Version == "" {
 		panic("routespec: document version is required")
 	}
+	for name, scheme := range info.SecuritySchemes {
+		if name == "" {
+			panic("routespec: security scheme name is required")
+		}
+		if scheme.Type == "" {
+			panic(fmt.Sprintf("routespec: security scheme %q type is required", name))
+		}
+	}
 
 	api := &API{
-		info:       info,
+		info:       cloneInfo(info),
 		operations: make(map[routeKey]Operation),
 		overrides:  make(map[reflect.Type]Schema),
 	}

@@ -18,6 +18,7 @@ func buildDocument(info Info, operations map[routeKey]Operation, overrides map[r
 		names:      make(map[string]reflect.Type),
 		overrides:  overrides,
 	}
+	validateSecurityRequirements(info, operations)
 	document := Document{
 		OpenAPI: "3.1.0",
 		Info: DocumentInfo{
@@ -26,6 +27,9 @@ func buildDocument(info Info, operations map[routeKey]Operation, overrides map[r
 			Description: info.Description,
 		},
 		Paths: make(map[string]PathItem),
+		Components: Components{
+			SecuritySchemes: cloneSecuritySchemes(info.SecuritySchemes),
+		},
 	}
 
 	keys := make([]routeKey, 0, len(operations))
@@ -119,6 +123,29 @@ func (builder *schemaBuilder) operation(path string, source Operation) DocumentO
 	return operation
 }
 
+func validateSecurityRequirements(info Info, operations map[routeKey]Operation) {
+	for key, operation := range operations {
+		for _, requirement := range operation.Security {
+			for name := range requirement {
+				if _, exists := info.SecuritySchemes[name]; !exists {
+					panic(fmt.Sprintf("routespec: register %s %s: security scheme %q is not configured", key.method, key.path, name))
+				}
+			}
+		}
+	}
+}
+
+func cloneSecuritySchemes(source map[string]SecurityScheme) map[string]SecurityScheme {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make(map[string]SecurityScheme, len(source))
+	for name, scheme := range source {
+		result[name] = scheme
+	}
+	return result
+}
+
 func cloneSecurity(source []SecurityRequirement) []SecurityRequirement {
 	if len(source) == 0 {
 		return nil
@@ -127,7 +154,8 @@ func cloneSecurity(source []SecurityRequirement) []SecurityRequirement {
 	for i, requirement := range source {
 		result[i] = make(SecurityRequirement, len(requirement))
 		for name, scopes := range requirement {
-			result[i][name] = append([]string(nil), scopes...)
+			result[i][name] = make([]string, len(scopes))
+			copy(result[i][name], scopes)
 		}
 	}
 	return result

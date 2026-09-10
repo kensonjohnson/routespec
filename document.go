@@ -17,7 +17,8 @@ type DocumentInfo struct {
 
 // Components holds reusable schemas.
 type Components struct {
-	Schemas map[string]Schema `json:"schemas,omitempty"`
+	Schemas         map[string]Schema         `json:"schemas,omitempty"`
+	SecuritySchemes map[string]SecurityScheme `json:"securitySchemes,omitempty"`
 }
 
 // PathItem holds operations for one path.
