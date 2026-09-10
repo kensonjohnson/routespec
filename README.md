@@ -23,11 +23,17 @@ api.RegisterFunc(http.MethodPost, "/widgets/{id}", createWidget, routespec.Opera
         http.StatusBadRequest: routespec.JSON[problemResponse](),
     },
 })
-
-mux.Handle("GET /openapi.json", api.Handler())
 ```
 
 Use `Register` with an `http.Handler`. Use `RegisterFunc` with an `http.HandlerFunc`. Both panic during startup for invalid metadata, a duplicate operation, or an invalid route. This matches `http.ServeMux.Handle`.
+
+If you want to expose a live document to a UI or other tooling, mount the optional handler where it fits the application:
+
+```go
+mux.Handle("GET /openapi.json", api.Handler())
+```
+
+The application chooses the route, access control, and caching policy. Do not mount it when the API description should stay private; use `api.JSON()` to export a file instead.
 
 ## httprouter
 
