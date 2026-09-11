@@ -40,6 +40,10 @@ jobs:
             echo "tag already exists: $VERSION" >&2
             exit 1
           fi
+          if ! grep -Fqx "## ${VERSION#v}" CHANGELOG.md; then
+            echo "CHANGELOG.md must include a ## ${VERSION#v} heading" >&2
+            exit 1
+          fi
       - run: ./scripts/release-dry-run.sh
         env:
           RELEASE_VERSION: ${{ inputs.version }}

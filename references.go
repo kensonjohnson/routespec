@@ -96,8 +96,11 @@ func validateSchemaReferences(schema Schema, components map[string]Schema) {
 }
 
 func validateSchemaReference(reference string, components map[string]Schema, label string) {
-	if !strings.HasPrefix(reference, "#/") {
+	if !strings.HasPrefix(reference, "#") {
 		return
+	}
+	if !strings.HasPrefix(reference, "#/") {
+		panic(fmt.Sprintf("routespec: %s reference %q is not a valid local JSON pointer", label, reference))
 	}
 	const schemaPrefix = "#/components/schemas/"
 	if !strings.HasPrefix(reference, schemaPrefix) {
@@ -118,7 +121,10 @@ func validateLinkReference(name string, link Link, operationIDs, operationRefere
 			panic(fmt.Sprintf("routespec: link %q operation ID %q does not exist", name, link.OperationID))
 		}
 	}
-	if strings.HasPrefix(link.OperationRef, "#/") {
+	if strings.HasPrefix(link.OperationRef, "#") {
+		if !strings.HasPrefix(link.OperationRef, "#/") {
+			panic(fmt.Sprintf("routespec: link %q operation reference %q is not a valid local JSON pointer", name, link.OperationRef))
+		}
 		if _, exists := operationReferences[link.OperationRef]; !exists {
 			panic(fmt.Sprintf("routespec: link %q operation reference %q does not exist", name, link.OperationRef))
 		}

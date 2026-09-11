@@ -119,13 +119,13 @@ Routespec does not provide an export CLI. The application owns route constructio
 
 Routespec's first public release is `v0.1.0` under Apache-2.0. Public APIs may change in later `v0.x` minor releases. Patch releases remain backward-compatible. When practical, a replacement stays deprecated for one minor release before removal.
 
-Before tagging a release, update `CHANGELOG.md` and run:
+Before releasing, move the notes out of `Unreleased` under a `## 0.1.0` heading in `CHANGELOG.md`, then run:
 
 ```sh
-./scripts/release-dry-run.sh
+RELEASE_VERSION=v0.1.0 ./scripts/release-dry-run.sh
 ```
 
-From `main`, run the `Release` workflow in GitHub Actions and provide a `v0.MINOR.PATCH` version such as `v0.1.0`. The workflow reruns the release checks, creates and pushes the tag for the selected commit, verifies a clean temporary consumer module against that tag, and creates GitHub release notes. The dry run also verifies a temporary consumer against the local source at the intended module version. To rerun that local check:
+Set `RELEASE_VERSION` to the version you plan to release. From `main`, run the `Release` workflow in GitHub Actions and provide a `v0.MINOR.PATCH` version such as `v0.1.0`. The workflow reruns the release checks, creates and pushes the tag for the selected commit, verifies a clean temporary consumer module against that tag, and creates GitHub release notes. The dry run also verifies a temporary consumer against the local source at the intended module version. To rerun that local check:
 
 ```sh
 ./scripts/verify-consumer.sh v0.1.0 "$PWD"

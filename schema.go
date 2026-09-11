@@ -291,14 +291,14 @@ func documentLinks(links map[string]LinkSpec) map[string]Link {
 	for name, link := range links {
 		parameters := make(map[string]any, len(link.Parameters))
 		for parameter, value := range link.Parameters {
-			parameters[parameter] = value
+			parameters[parameter] = cloneSchemaValue(value)
 		}
 		result[name] = Link{
 			OperationID:  link.OperationID,
 			OperationRef: link.OperationRef,
 			Description:  link.Description,
 			Parameters:   parameters,
-			RequestBody:  link.RequestBody,
+			RequestBody:  cloneSchemaValue(link.RequestBody),
 		}
 	}
 	return result
@@ -509,17 +509,22 @@ func (builder *schemaBuilder) schemaValue(t reflect.Type) Schema {
 }
 
 func (builder *schemaBuilder) objectSchema(t reflect.Type) Schema {
-	fields := jsonFields(t)
-	properties := make(map[string]Schema, len(fields))
+	fieldSet := jsonFields(t)
+	properties := make(map[string]Schema, len(fieldSet.properties))
 	required := make([]string, 0)
-	for name, field := range fields {
+	for name, field := range fieldSet.properties {
 		properties[name] = builder.fieldSchema(field, false)
 		if field.Annotation.required {
 			required = append(required, name)
 		}
 	}
+	var additionalProperties *Schema
+	if fieldSet.fallback != nil {
+		fallback := builder.fieldSchema(*fieldSet.fallback, false)
+		additionalProperties = fallback.AdditionalProperties
+	}
 	sort.Strings(required)
-	return Schema{Type: "object", Properties: properties, Required: required}
+	return Schema{Type: "object", Properties: properties, Required: required, AdditionalProperties: additionalProperties}
 }
 
 func componentName(t reflect.Type) string {
@@ -567,25 +572,27 @@ type jsonTag struct {
 }
 
 type jsonFieldLevel struct {
-	typeOf reflect.Type
-	index  []int
+	typeOf    reflect.Type
+	index     []int
+	ancestors map[reflect.Type]bool
 }
 
-func jsonFields(t reflect.Type) map[string]jsonField {
+type jsonFieldSet struct {
+	properties map[string]jsonField
+	fallback   *jsonField
+}
+
+func jsonFields(t reflect.Type) jsonFieldSet {
 	if t.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("routespec: expected struct, got %s", t))
 	}
 
 	candidates := make([]jsonFieldCandidate, 0)
-	current := []jsonFieldLevel{{typeOf: t}}
-	visited := make(map[reflect.Type]bool)
+	current := []jsonFieldLevel{{typeOf: t, ancestors: map[reflect.Type]bool{t: true}}}
+	var fallback *jsonField
 	for len(current) > 0 {
 		next := make([]jsonFieldLevel, 0)
 		for _, level := range current {
-			if visited[level.typeOf] {
-				continue
-			}
-			visited[level.typeOf] = true
 			for i := 0; i < level.typeOf.NumField(); i++ {
 				field := level.typeOf.Field(i)
 				if !field.IsExported() {
@@ -601,11 +608,46 @@ func jsonFields(t reflect.Type) map[string]jsonField {
 					continue
 				}
 				index := append(append([]int(nil), level.index...), i)
-				if tag.embedded || (tag.name == "" && field.Anonymous) {
-					if fieldType.Kind() != reflect.Struct {
-						panic(fmt.Sprintf("routespec: json embed on %s.%s requires a struct", level.typeOf, field.Name))
+				if tag.embedded {
+					switch fieldType.Kind() {
+					case reflect.Struct:
+						if level.ancestors[fieldType] {
+							continue
+						}
+						ancestors := make(map[reflect.Type]bool, len(level.ancestors)+1)
+						for ancestor := range level.ancestors {
+							ancestors[ancestor] = true
+						}
+						ancestors[fieldType] = true
+						next = append(next, jsonFieldLevel{typeOf: fieldType, index: index, ancestors: ancestors})
+						continue
+					case reflect.Map:
+						if fieldType.Key().Kind() != reflect.String {
+							panic(fmt.Sprintf("routespec: json embed map on %s.%s requires string keys", level.typeOf, field.Name))
+						}
+						if fallback != nil {
+							panic(fmt.Sprintf("routespec: %s has multiple json embed map fallbacks", t))
+						}
+						field := jsonField{Field: field, Type: field.Type, Annotation: parseAnnotation(field)}
+						fallback = &field
+						continue
+					default:
+						panic(fmt.Sprintf("routespec: json embed on %s.%s requires a struct or map", level.typeOf, field.Name))
 					}
-					next = append(next, jsonFieldLevel{typeOf: fieldType, index: index})
+				}
+				if tag.name == "" && field.Anonymous {
+					if fieldType.Kind() != reflect.Struct {
+						panic(fmt.Sprintf("routespec: anonymous JSON field %s.%s requires a struct", level.typeOf, field.Name))
+					}
+					if level.ancestors[fieldType] {
+						continue
+					}
+					ancestors := make(map[reflect.Type]bool, len(level.ancestors)+1)
+					for ancestor := range level.ancestors {
+						ancestors[ancestor] = true
+					}
+					ancestors[fieldType] = true
+					next = append(next, jsonFieldLevel{typeOf: fieldType, index: index, ancestors: ancestors})
 					continue
 				}
 				if tag.name == "" {
@@ -660,10 +702,10 @@ func jsonFields(t reflect.Type) map[string]jsonField {
 		}
 		start = end
 	}
-	if len(fields) == 0 && t.NumField() > 0 {
+	if len(fields) == 0 && fallback == nil && t.NumField() > 0 {
 		panic(fmt.Sprintf("routespec: %s has no JSON-representable fields", t))
 	}
-	return fields
+	return jsonFieldSet{properties: fields, fallback: fallback}
 }
 
 func dominantJSONField(candidates []jsonFieldCandidate) (jsonFieldCandidate, bool) {
@@ -729,9 +771,12 @@ func isValidJSONTag(name string) bool {
 }
 
 func parameterFields(t reflect.Type) map[string]jsonField {
-	fields := jsonFields(t)
-	parameters := make(map[string]jsonField, len(fields))
-	for jsonName, field := range fields {
+	fieldSet := jsonFields(t)
+	if fieldSet.fallback != nil {
+		panic(fmt.Sprintf("routespec: parameter model %s cannot use a json embed map fallback", t))
+	}
+	parameters := make(map[string]jsonField, len(fieldSet.properties))
+	for jsonName, field := range fieldSet.properties {
 		name := jsonName
 		if field.Annotation.name != "" {
 			name = field.Annotation.name
