@@ -127,6 +127,9 @@ func validateSchemaCompositions(document Document) {
 				for _, content := range response.Content {
 					validateSchema(content.Schema)
 				}
+				for _, header := range response.Headers {
+					validateSchema(header.Schema)
+				}
 			}
 		}
 	}
@@ -209,29 +212,89 @@ func (builder *schemaBuilder) operation(path string, source Operation) DocumentO
 		Security:    cloneSecurity(source.Security),
 		Responses:   make(map[string]Response, len(source.Responses)),
 	}
-	if source.RequestBody.typeOf != nil {
+	if source.RequestBody.Content != nil {
 		operation.RequestBody = &RequestBody{
-			Required: true,
-			Content: map[string]MediaType{
-				source.RequestBody.mediaType: {Schema: builder.schema(source.RequestBody.typeOf)},
-			},
+			Description: source.RequestBody.Description,
+			Required:    source.RequestBody.Required,
+			Content:     builder.content(source.RequestBody.Content),
 		}
 	}
 	operation.Parameters = append(operation.Parameters, builder.parameters(source.Path)...)
 	operation.Parameters = append(operation.Parameters, builder.parameters(source.Query)...)
-	for status, content := range source.Responses {
-		response := Response{Description: http.StatusText(status)}
+	operation.Parameters = append(operation.Parameters, builder.parameters(source.Header)...)
+	operation.Parameters = append(operation.Parameters, builder.parameters(source.Cookie)...)
+	for status, sourceResponse := range source.Responses {
+		response := Response{
+			Description: sourceResponse.Description,
+			Content:     builder.content(sourceResponse.Content),
+			Headers:     builder.headers(sourceResponse.Headers),
+			Links:       documentLinks(sourceResponse.Links),
+		}
+		if response.Description == "" {
+			response.Description = http.StatusText(status)
+		}
 		if response.Description == "" {
 			response.Description = "Response"
-		}
-		if content.typeOf != nil {
-			response.Content = map[string]MediaType{
-				content.mediaType: {Schema: builder.schema(content.typeOf)},
-			}
 		}
 		operation.Responses[fmt.Sprint(status)] = response
 	}
 	return operation
+}
+
+func (builder *schemaBuilder) content(contents []Content) map[string]MediaType {
+	if len(contents) == 0 {
+		return nil
+	}
+	result := make(map[string]MediaType, len(contents))
+	for _, content := range contents {
+		schema := builder.schema(content.typeOf)
+		if content.binary {
+			schema = Schema{Type: "string", Format: "binary"}
+		}
+		result[content.mediaType] = MediaType{Schema: schema}
+	}
+	return result
+}
+
+func (builder *schemaBuilder) headers(headers map[string]HeaderSpec) map[string]DocumentHeader {
+	if len(headers) == 0 {
+		return nil
+	}
+	result := make(map[string]DocumentHeader, len(headers))
+	for name, header := range headers {
+		schema := cloneSchema(header.Schema)
+		if header.typeOf != nil {
+			schema = builder.schema(header.typeOf)
+		}
+		result[name] = DocumentHeader{
+			Description: header.Description,
+			Required:    header.Required,
+			Deprecated:  header.Deprecated,
+			Schema:      schema,
+		}
+	}
+	return result
+}
+
+func documentLinks(links map[string]LinkSpec) map[string]Link {
+	if len(links) == 0 {
+		return nil
+	}
+	result := make(map[string]Link, len(links))
+	for name, link := range links {
+		parameters := make(map[string]any, len(link.Parameters))
+		for parameter, value := range link.Parameters {
+			parameters[parameter] = value
+		}
+		result[name] = Link{
+			OperationID:  link.OperationID,
+			OperationRef: link.OperationRef,
+			Description:  link.Description,
+			Parameters:   parameters,
+			RequestBody:  link.RequestBody,
+		}
+	}
+	return result
 }
 
 func validateSecurityRequirements(info Info, operations map[routeKey]Operation) {
@@ -288,14 +351,25 @@ func (builder *schemaBuilder) parameters(model ParameterModel) []Parameter {
 		field := fields[name]
 		schema := builder.fieldSchema(field, true)
 		parameters = append(parameters, Parameter{
-			Name:        name,
-			In:          string(model.location),
-			Description: field.Annotation.description,
-			Required:    model.location == pathParameter || field.Annotation.required,
-			Schema:      schema,
+			Name:          name,
+			In:            string(model.location),
+			Description:   field.Annotation.description,
+			Required:      model.location == pathParameter || field.Annotation.required,
+			Style:         model.style,
+			Explode:       cloneBool(model.explode),
+			AllowReserved: model.allowReserved,
+			Schema:        schema,
 		})
 	}
 	return parameters
+}
+
+func cloneBool(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
 
 func (builder *schemaBuilder) fieldSchema(field jsonField, allowName bool) Schema {

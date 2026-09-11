@@ -18,8 +18,8 @@ func ExampleJSON_annotations() {
 	})
 	api.RegisterFunc(http.MethodPost, "/widgets", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
 		ID:          "createWidget",
-		RequestBody: routespec.JSON[createWidgetRequest](),
-		Responses:   routespec.Responses{http.StatusCreated: routespec.JSON[createWidgetRequest]()},
+		RequestBody: routespec.Request(routespec.JSON[createWidgetRequest]()),
+		Responses:   routespec.Responses{http.StatusCreated: routespec.Respond(routespec.JSON[createWidgetRequest]())},
 	})
 
 	fmt.Println(api.Document().Paths["/widgets"].Post.OperationID)

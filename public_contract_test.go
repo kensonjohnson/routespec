@@ -99,10 +99,10 @@ func newPublicContractAPI() *routespec.API {
 		Security:    []routespec.SecurityRequirement{{"bearerAuth": {}}},
 		Path:        routespec.Path[publicContractPath](),
 		Query:       routespec.Query[publicContractQuery](),
-		RequestBody: routespec.JSON[publicContractRequest](),
+		RequestBody: routespec.Request(routespec.JSON[publicContractRequest]()),
 		Responses: routespec.Responses{
-			http.StatusOK:         routespec.JSON[publicContractResponse](),
-			http.StatusBadRequest: routespec.JSON[publicContractProblem](),
+			http.StatusOK:         routespec.Respond(routespec.JSON[publicContractResponse]()),
+			http.StatusBadRequest: routespec.Respond(routespec.JSON[publicContractProblem]()),
 		},
 	})
 	return api

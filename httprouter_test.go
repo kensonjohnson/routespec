@@ -54,7 +54,7 @@ func TestHTTPRouterRegisterAndDocument(t *testing.T) {
 		Tags: []string{"users"},
 		Path: routespec.Path[httpRouterUserPath](),
 		Responses: routespec.Responses{
-			http.StatusOK: routespec.JSON[httpRouterUserResponse](),
+			http.StatusOK: routespec.Respond(routespec.JSON[httpRouterUserResponse]()),
 		},
 	})
 

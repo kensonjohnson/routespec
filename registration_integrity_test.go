@@ -61,7 +61,7 @@ func TestRegisterCopiesCallerOwnedOperationData(t *testing.T) {
 
 	tags := []string{"stable"}
 	security := routespec.SecurityRequirement{"auth": {"read"}}
-	responses := routespec.Responses{http.StatusOK: routespec.JSON[registrationIntegrityResponse]()}
+	responses := routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[registrationIntegrityResponse]())}
 	operation := routespec.Operation{
 		ID:        "immutableOperation",
 		Tags:      tags,
@@ -80,7 +80,7 @@ func TestRegisterCopiesCallerOwnedOperationData(t *testing.T) {
 	security["auth"][0] = "write"
 	security["auth"] = append(security["auth"], "admin")
 	security["secondary"] = []string{"admin"}
-	responses[http.StatusCreated] = routespec.JSON[registrationIntegrityResponse]()
+	responses[http.StatusCreated] = routespec.Respond(routespec.JSON[registrationIntegrityResponse]())
 	delete(responses, http.StatusOK)
 	assertRegisteredOperationUnchanged(t, api, wantDocument, wantJSON)
 
@@ -96,13 +96,13 @@ func TestRegisterCopiesCallerOwnedOperationData(t *testing.T) {
 				tags[0] = "mutated"
 				security["auth"][0] = "write"
 				security["secondary"] = []string{"admin"}
-				responses[http.StatusCreated] = routespec.JSON[registrationIntegrityResponse]()
+				responses[http.StatusCreated] = routespec.Respond(routespec.JSON[registrationIntegrityResponse]())
 				delete(responses, http.StatusOK)
 			} else {
 				tags[0] = "changed"
 				security["auth"][0] = "read"
 				delete(security, "secondary")
-				responses[http.StatusOK] = routespec.JSON[registrationIntegrityResponse]()
+				responses[http.StatusOK] = routespec.Respond(routespec.JSON[registrationIntegrityResponse]())
 				delete(responses, http.StatusCreated)
 			}
 		}

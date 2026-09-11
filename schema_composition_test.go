@@ -36,7 +36,7 @@ func TestWithSchemaOverrideSerializesSchemaComposition(t *testing.T) {
 	)
 	api.RegisterFunc(http.MethodGet, "/value", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
 		ID:        "getComposition",
-		Responses: routespec.Responses{http.StatusOK: routespec.JSON[schemaCompositionValue]()},
+		Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[schemaCompositionValue]())},
 	})
 
 	encoded, err := api.JSON()
@@ -76,7 +76,7 @@ func TestWithSchemaOverrideSupportsDiscriminatedUnion(t *testing.T) {
 	)
 	api.RegisterFunc(http.MethodGet, "/pet", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
 		ID:        "getPet",
-		Responses: routespec.Responses{http.StatusOK: routespec.JSON[discriminatedUnionValue]()},
+		Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[discriminatedUnionValue]())},
 	})
 
 	got := api.Document().Paths["/pet"].Get.Responses["200"].Content["application/json"].Schema
@@ -197,7 +197,7 @@ func assertSchemaCompositionRegistrationPanics(t *testing.T, schema routespec.Sc
 			w.WriteHeader(http.StatusNoContent)
 		}, routespec.Operation{
 			ID:        "invalidComposition",
-			Responses: routespec.Responses{http.StatusNoContent: routespec.JSON[schemaCompositionValue]()},
+			Responses: routespec.Responses{http.StatusNoContent: routespec.Respond(routespec.JSON[schemaCompositionValue]())},
 		})
 	}()
 	if !panicked {

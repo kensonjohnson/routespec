@@ -17,10 +17,10 @@ api.RegisterFunc(http.MethodPost, "/widgets/{id}", createWidget, routespec.Opera
     ID:          "createWidget",
     Summary:     "Create a widget",
     Path:        routespec.Path[widgetPath](),
-    RequestBody: routespec.JSON[createWidgetRequest](),
+    RequestBody: routespec.Request(routespec.JSON[createWidgetRequest]()),
     Responses: routespec.Responses{
-        http.StatusCreated: routespec.JSON[widgetResponse](),
-        http.StatusBadRequest: routespec.JSON[problemResponse](),
+        http.StatusCreated: routespec.Respond(routespec.JSON[widgetResponse]()),
+        http.StatusBadRequest: routespec.Respond(routespec.JSON[problemResponse]()),
     },
 })
 ```
@@ -47,7 +47,7 @@ api := routespec.NewHTTPRouter(router, routespec.Info{
 api.RegisterFunc(http.MethodGet, "/widgets/:id", getWidget, routespec.Operation{
     ID:        "getWidget",
     Path:      routespec.Path[widgetPath](),
-    Responses: routespec.Responses{http.StatusOK: routespec.JSON[widgetResponse]()},
+    Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[widgetResponse]())},
 })
 ```
 
@@ -117,7 +117,7 @@ Routespec does not provide an export CLI. The application owns route constructio
 
 ## DTOs and annotations
 
-`json` tags determine body and response property names. `Path[T]` and `Query[T]` use the same names by default.
+`json` tags determine body and response property names. `Path[T]`, `Query[T]`, `Header[T]`, and `Cookie[T]` use the same names by default.
 
 ```go
 type createWidgetRequest struct {
@@ -132,9 +132,33 @@ type widgetQuery struct {
 
 Supported `openapi` directives are `required`, `name`, `description`, `format`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`, `minItems`, `maxItems`, `uniqueItems`, `minProperties`, `maxProperties`, `additionalProperties=false`, `enum`, `const`, `default`, `example`, `readOnly`, `writeOnly`, and `deprecated`.
 
-Separate directives with commas. Escape commas, pipes, equals signs, and backslashes in values with a backslash. `enum` values use `|` separators. `name` only applies to `Path` and `Query` models. Body and response fields always use their `json` name.
+Separate directives with commas. Escape commas, pipes, equals signs, and backslashes in values with a backslash. `enum` values use `|` separators. `name` only applies to `Path`, `Query`, `Header`, and `Cookie` models. Body and response fields always use their `json` name.
 
 Tags change only the generated document. They do not validate HTTP input. Conditional and cross-field rules remain application code.
+
+## HTTP metadata
+
+`RequestSpec` and `ResponseSpec` support multiple representations through `Content`. Use `JSON[T]()`, `Text[T]()`, `Binary[T]()`, `Form[T]()`, `Multipart[T]()`, or `Media[T](mediaType)`. `ResponseSpec` can also declare a description, typed response headers with `ResponseHeader[T]()`, and OpenAPI links.
+
+```go
+routespec.Operation{
+    RequestBody: routespec.Request(
+        routespec.Form[createWidgetRequest](),
+        routespec.Multipart[createWidgetRequest](),
+    ),
+    Responses: routespec.Responses{
+        http.StatusCreated: {
+            Description: "Widget created.",
+            Content: []routespec.Content{routespec.JSON[widgetResponse]()},
+            Headers: map[string]routespec.HeaderSpec{
+                "X-Request-ID": routespec.ResponseHeader[string](),
+            },
+        },
+    },
+}
+```
+
+`ParameterModel.Style`, `Explode`, and `AllowReserved` expose supported OpenAPI parameter serialization. Invalid locations, styles, media types, and duplicate representations panic during registration.
 
 Routespec supports structs, nested and recursive named structs, booleans, numbers, strings, `time.Time`, slices, arrays, maps with string keys, and pointers. Pointer fields emit an OpenAPI 3.1 schema that permits `null` unless `omitempty` or `omitzero` omits a nil pointer. Use `additionalProperties=false` on a struct field to close that object schema.
 

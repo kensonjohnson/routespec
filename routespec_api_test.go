@@ -64,14 +64,14 @@ func TestRegisterAndDocument(t *testing.T) {
 		Summary:   "Get a user",
 		Path:      routespec.Path[getUserPath](),
 		Query:     routespec.Query[listUsersQuery](),
-		Responses: routespec.Responses{http.StatusOK: routespec.JSON[userResponse]()},
+		Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[userResponse]())},
 	})
 	api.RegisterFunc(http.MethodPost, "/users", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	}, routespec.Operation{
 		ID:          "createUser",
-		RequestBody: routespec.JSON[createUserRequest](),
-		Responses:   routespec.Responses{http.StatusCreated: routespec.JSON[userResponse]()},
+		RequestBody: routespec.Request(routespec.JSON[createUserRequest]()),
+		Responses:   routespec.Responses{http.StatusCreated: routespec.Respond(routespec.JSON[userResponse]())},
 	})
 
 	response := httptest.NewRecorder()
@@ -137,7 +137,7 @@ func TestDocumentJSONRoundTripPreservesSchemaExtensions(t *testing.T) {
 	api := routespec.New(http.NewServeMux(), routespec.Info{Title: "Example", Version: "1.0.0"})
 	api.RegisterFunc(http.MethodGet, "/users", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
 		ID:        "listUsers",
-		Responses: routespec.Responses{http.StatusOK: routespec.JSON[nullableUserResponse]()},
+		Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[nullableUserResponse]())},
 	})
 
 	body, err := api.JSON()
@@ -203,7 +203,7 @@ func TestRegisterPanicsForInvalidMetadata(t *testing.T) {
 	mustPanic(t, func() {
 		api.RegisterFunc(http.MethodGet, "/invalid", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
 			ID:        "invalidSchema",
-			Responses: routespec.Responses{http.StatusOK: routespec.JSON[map[int]string]()},
+			Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[map[int]string]())},
 		})
 	})
 

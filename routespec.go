@@ -141,10 +141,51 @@ func cloneOperation(operation Operation) Operation {
 	clone := operation
 	clone.Tags = append([]string(nil), operation.Tags...)
 	clone.Security = cloneSecurity(operation.Security)
+	clone.RequestBody.Content = cloneContents(operation.RequestBody.Content)
 	clone.Responses = make(Responses, len(operation.Responses))
-	for status, content := range operation.Responses {
-		clone.Responses[status] = content
+	for status, response := range operation.Responses {
+		clone.Responses[status] = cloneResponseSpec(response)
 	}
+	return clone
+}
+
+func cloneResponseSpec(response ResponseSpec) ResponseSpec {
+	clone := response
+	clone.Content = cloneContents(response.Content)
+	if response.Headers != nil {
+		clone.Headers = make(map[string]HeaderSpec, len(response.Headers))
+		for name, header := range response.Headers {
+			header.Schema = cloneSchema(header.Schema)
+			clone.Headers[name] = header
+		}
+	}
+	if response.Links != nil {
+		clone.Links = make(map[string]LinkSpec, len(response.Links))
+		for name, link := range response.Links {
+			clone.Links[name] = cloneLinkSpec(link)
+		}
+	}
+	return clone
+}
+
+func cloneContents(contents []Content) []Content {
+	if contents == nil {
+		return nil
+	}
+	clone := make([]Content, len(contents))
+	copy(clone, contents)
+	return clone
+}
+
+func cloneLinkSpec(link LinkSpec) LinkSpec {
+	clone := link
+	if link.Parameters != nil {
+		clone.Parameters = make(map[string]any, len(link.Parameters))
+		for name, value := range link.Parameters {
+			clone.Parameters[name] = cloneSchemaValue(value)
+		}
+	}
+	clone.RequestBody = cloneSchemaValue(link.RequestBody)
 	return clone
 }
 
@@ -197,15 +238,27 @@ func validateOperation(method, path string, operation Operation) {
 	if len(operation.Responses) == 0 {
 		panicRoute(method, path, "at least one response is required")
 	}
-	for status, content := range operation.Responses {
+	for status, response := range operation.Responses {
 		if status < http.StatusContinue || status > 599 {
 			panicRoute(method, path, fmt.Sprintf("invalid response status %d", status))
 		}
-		validateContent(method, path, content)
+		validateContents(method, path, response.Content, "response content")
+		for name := range response.Headers {
+			if name == "" {
+				panicRoute(method, path, "response header name is required")
+			}
+		}
+		for name, link := range response.Links {
+			if name == "" || (link.OperationID == "" && link.OperationRef == "") || (link.OperationID != "" && link.OperationRef != "") {
+				panicRoute(method, path, "response links require one operation ID or operation reference")
+			}
+		}
 	}
-	validateContent(method, path, operation.RequestBody)
+	validateContents(method, path, operation.RequestBody.Content, "request content")
 	validateParameterModel(method, path, operation.Path, pathParameter)
 	validateParameterModel(method, path, operation.Query, queryParameter)
+	validateParameterModel(method, path, operation.Header, headerParameter)
+	validateParameterModel(method, path, operation.Cookie, cookieParameter)
 
 	pathParameters := serveMuxPathParameters(path)
 	if len(pathParameters) > 0 && operation.Path.typeOf == nil {
@@ -234,12 +287,22 @@ func supportedMethod(method string) bool {
 	}
 }
 
-func validateContent(method, path string, content Content) {
-	if content.typeOf == nil {
+func validateContents(method, path string, contents []Content, label string) {
+	if contents == nil {
 		return
 	}
-	if content.mediaType == "" {
-		panicRoute(method, path, "content type is required")
+	if len(contents) == 0 {
+		panicRoute(method, path, label+" requires at least one representation")
+	}
+	mediaTypes := make(map[string]struct{}, len(contents))
+	for _, content := range contents {
+		if content.typeOf == nil || content.mediaType == "" {
+			panicRoute(method, path, "content type is required")
+		}
+		if _, exists := mediaTypes[content.mediaType]; exists {
+			panicRoute(method, path, fmt.Sprintf("duplicate content type %q", content.mediaType))
+		}
+		mediaTypes[content.mediaType] = struct{}{}
 	}
 }
 
@@ -252,6 +315,30 @@ func validateParameterModel(method, path string, model ParameterModel, expected 
 	}
 	if deref(model.typeOf).Kind() != reflect.Struct {
 		panicRoute(method, path, fmt.Sprintf("%s model must be a struct", expected))
+	}
+	if !validParameterStyle(expected, model.style) {
+		panicRoute(method, path, fmt.Sprintf("unsupported %s parameter style %q", expected, model.style))
+	}
+	if model.allowReserved && expected != queryParameter {
+		panicRoute(method, path, "allowReserved is only valid for query parameters")
+	}
+}
+
+func validParameterStyle(location parameterLocation, style string) bool {
+	if style == "" {
+		return true
+	}
+	switch location {
+	case pathParameter:
+		return style == "matrix" || style == "label" || style == "simple"
+	case queryParameter:
+		return style == "form" || style == "spaceDelimited" || style == "pipeDelimited" || style == "deepObject"
+	case headerParameter:
+		return style == "simple"
+	case cookieParameter:
+		return style == "form"
+	default:
+		return false
 	}
 }
 

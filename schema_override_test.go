@@ -33,7 +33,7 @@ func TestWithSchemaOverride(t *testing.T) {
 	)
 	api.RegisterFunc(http.MethodGet, "/value", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
 		ID:        "getValue",
-		Responses: routespec.Responses{http.StatusOK: routespec.JSON[flexibleValue]()},
+		Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[flexibleValue]())},
 	})
 
 	got := api.Document().Paths["/value"].Get.Responses["200"].Content["application/json"].Schema
@@ -62,7 +62,7 @@ func TestWithSchemaOverrideIsolatesMutableSchemas(t *testing.T) {
 	)
 	api.RegisterFunc(http.MethodGet, "/value", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
 		ID:        "getValue",
-		Responses: routespec.Responses{http.StatusOK: routespec.JSON[mutableOverrideValue]()},
+		Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[mutableOverrideValue]())},
 	})
 
 	want := api.Document()
@@ -93,7 +93,7 @@ func TestWithSchemaOverridePreservesUnannotatedFields(t *testing.T) {
 	)
 	api.RegisterFunc(http.MethodGet, "/value", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
 		ID:        "getValue",
-		Responses: routespec.Responses{http.StatusOK: routespec.JSON[constrainedOverrideHolder]()},
+		Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[constrainedOverrideHolder]())},
 	})
 
 	property := api.Document().Components.Schemas["constrainedOverrideHolder"].Properties["value"]

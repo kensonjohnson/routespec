@@ -11,8 +11,11 @@
 // uniqueItems, minProperties, maxProperties, additionalProperties=false, enum,
 // const, default, example, readOnly, writeOnly, and deprecated. Separate directives
 // with commas. Escape commas, pipes, equals signs, and backslashes in values with
-// a backslash. The name directive only applies to Path and Query models; JSON
-// request and response fields always use their json tag name.
+// a backslash. The name directive only applies to Path, Query, Header, and Cookie
+// models; JSON request and response fields always use their json tag name.
+//
+// Use RequestSpec and ResponseSpec to declare bodies and responses explicitly.
+// Content helpers cover JSON, text, binary, form, multipart, and custom media types.
 //
 // WithSchemaOverride provides an explicit schema for types that tags cannot
 // describe, such as union schemas.

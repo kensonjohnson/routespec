@@ -45,25 +45,49 @@ type DocumentOperation struct {
 	Responses   map[string]Response   `json:"responses"`
 }
 
-// Parameter is an OpenAPI path or query parameter.
+// Parameter is an OpenAPI operation parameter.
 type Parameter struct {
-	Name        string `json:"name"`
-	In          string `json:"in"`
-	Description string `json:"description,omitempty"`
-	Required    bool   `json:"required,omitzero"`
-	Schema      Schema `json:"schema"`
+	Name          string `json:"name"`
+	In            string `json:"in"`
+	Description   string `json:"description,omitempty"`
+	Required      bool   `json:"required,omitzero"`
+	Deprecated    bool   `json:"deprecated,omitzero"`
+	Style         string `json:"style,omitempty"`
+	Explode       *bool  `json:"explode,omitempty"`
+	AllowReserved bool   `json:"allowReserved,omitzero"`
+	Schema        Schema `json:"schema"`
 }
 
 // RequestBody is an OpenAPI request body.
 type RequestBody struct {
-	Required bool                 `json:"required"`
-	Content  map[string]MediaType `json:"content"`
+	Description string               `json:"description,omitempty"`
+	Required    bool                 `json:"required,omitzero"`
+	Content     map[string]MediaType `json:"content"`
 }
 
 // Response is an OpenAPI response.
 type Response struct {
-	Description string               `json:"description"`
-	Content     map[string]MediaType `json:"content,omitempty"`
+	Description string                    `json:"description"`
+	Headers     map[string]DocumentHeader `json:"headers,omitempty"`
+	Content     map[string]MediaType      `json:"content,omitempty"`
+	Links       map[string]Link           `json:"links,omitempty"`
+}
+
+// DocumentHeader is an OpenAPI response header.
+type DocumentHeader struct {
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitzero"`
+	Deprecated  bool   `json:"deprecated,omitzero"`
+	Schema      Schema `json:"schema"`
+}
+
+// Link is an OpenAPI response link.
+type Link struct {
+	OperationID  string         `json:"operationId,omitempty"`
+	OperationRef string         `json:"operationRef,omitempty"`
+	Description  string         `json:"description,omitempty"`
+	Parameters   map[string]any `json:"parameters,omitempty"`
+	RequestBody  any            `json:"requestBody,omitempty"`
 }
 
 // MediaType describes a representation schema.

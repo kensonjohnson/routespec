@@ -64,7 +64,7 @@ func TestJSONSchemaFidelity(t *testing.T) {
 	api := routespec.New(http.NewServeMux(), routespec.Info{Title: "Schema fidelity", Version: "1.0.0"})
 	api.RegisterFunc(http.MethodPost, "/schema-fidelity", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
 		ID:          "schemaFidelity",
-		RequestBody: routespec.JSON[jsonSchemaFidelityDTO](),
+		RequestBody: routespec.Request(routespec.JSON[jsonSchemaFidelityDTO]()),
 		Responses:   routespec.Responses{http.StatusOK: {}},
 	})
 
@@ -107,7 +107,7 @@ func TestJSONSchemaFidelityUsesJSONV2Tags(t *testing.T) {
 	api := routespec.New(http.NewServeMux(), routespec.Info{Title: "Schema fidelity", Version: "1.0.0"})
 	api.RegisterFunc(http.MethodPost, "/json-v2", jsonSchemaFidelityHandler, routespec.Operation{
 		ID:          "jsonV2Tags",
-		RequestBody: routespec.JSON[jsonSchemaFidelityV2DTO](),
+		RequestBody: routespec.Request(routespec.JSON[jsonSchemaFidelityV2DTO]()),
 		Responses:   routespec.Responses{http.StatusOK: {}},
 	})
 
@@ -135,7 +135,7 @@ func TestJSONSchemaFidelityRejectsAmbiguousEmbeddedFields(t *testing.T) {
 	}()
 	api.RegisterFunc(http.MethodPost, "/ambiguous", jsonSchemaFidelityHandler, routespec.Operation{
 		ID:          "ambiguousEmbeddedFields",
-		RequestBody: routespec.JSON[jsonSchemaFidelityAmbiguousDTO](),
+		RequestBody: routespec.Request(routespec.JSON[jsonSchemaFidelityAmbiguousDTO]()),
 		Responses:   routespec.Responses{http.StatusOK: {}},
 	})
 }
@@ -150,9 +150,9 @@ func TestJSONSchemaFidelityInvalidTagsPanicDuringRegistration(t *testing.T) {
 			register: func(api *routespec.API) {
 				api.RegisterFunc(http.MethodPost, "/invalid-schema-fidelity", jsonSchemaFidelityHandler, routespec.Operation{
 					ID: "invalidSchemaFidelity",
-					RequestBody: routespec.JSON[struct {
+					RequestBody: routespec.Request(routespec.JSON[struct {
 						Value JSONSchemaFidelityCustomDTO `json:"value"`
-					}](),
+					}]()),
 					Responses: routespec.Responses{http.StatusOK: {}},
 				})
 			},
@@ -162,9 +162,9 @@ func TestJSONSchemaFidelityInvalidTagsPanicDuringRegistration(t *testing.T) {
 			register: func(api *routespec.API) {
 				api.RegisterFunc(http.MethodPost, "/invalid-schema-fidelity", jsonSchemaFidelityHandler, routespec.Operation{
 					ID: "invalidSchemaFidelity",
-					RequestBody: routespec.JSON[struct {
+					RequestBody: routespec.Request(routespec.JSON[struct {
 						Value struct{} `json:"value" openapi:"const=value"`
-					}](),
+					}]()),
 					Responses: routespec.Responses{http.StatusOK: {}},
 				})
 			},
@@ -174,9 +174,9 @@ func TestJSONSchemaFidelityInvalidTagsPanicDuringRegistration(t *testing.T) {
 			register: func(api *routespec.API) {
 				api.RegisterFunc(http.MethodPost, "/invalid-schema-fidelity", jsonSchemaFidelityHandler, routespec.Operation{
 					ID: "invalidSchemaFidelity",
-					RequestBody: routespec.JSON[struct {
+					RequestBody: routespec.Request(routespec.JSON[struct {
 						Value string `json:"value" openapi:"exclusiveMinimum=1"`
-					}](),
+					}]()),
 					Responses: routespec.Responses{http.StatusOK: {}},
 				})
 			},
@@ -186,9 +186,9 @@ func TestJSONSchemaFidelityInvalidTagsPanicDuringRegistration(t *testing.T) {
 			register: func(api *routespec.API) {
 				api.RegisterFunc(http.MethodPost, "/invalid-schema-fidelity", jsonSchemaFidelityHandler, routespec.Operation{
 					ID: "invalidSchemaFidelity",
-					RequestBody: routespec.JSON[struct {
+					RequestBody: routespec.Request(routespec.JSON[struct {
 						Value string `json:"value" openapi:"exclusiveMaximum=1"`
-					}](),
+					}]()),
 					Responses: routespec.Responses{http.StatusOK: {}},
 				})
 			},
@@ -198,9 +198,9 @@ func TestJSONSchemaFidelityInvalidTagsPanicDuringRegistration(t *testing.T) {
 			register: func(api *routespec.API) {
 				api.RegisterFunc(http.MethodPost, "/invalid-schema-fidelity", jsonSchemaFidelityHandler, routespec.Operation{
 					ID: "invalidSchemaFidelity",
-					RequestBody: routespec.JSON[struct {
+					RequestBody: routespec.Request(routespec.JSON[struct {
 						Value string `json:"value" openapi:"uniqueItems"`
-					}](),
+					}]()),
 					Responses: routespec.Responses{http.StatusOK: {}},
 				})
 			},
@@ -210,9 +210,9 @@ func TestJSONSchemaFidelityInvalidTagsPanicDuringRegistration(t *testing.T) {
 			register: func(api *routespec.API) {
 				api.RegisterFunc(http.MethodPost, "/invalid-schema-fidelity", jsonSchemaFidelityHandler, routespec.Operation{
 					ID: "invalidSchemaFidelity",
-					RequestBody: routespec.JSON[struct {
+					RequestBody: routespec.Request(routespec.JSON[struct {
 						Value string `json:"value" openapi:"additionalProperties=false"`
-					}](),
+					}]()),
 					Responses: routespec.Responses{http.StatusOK: {}},
 				})
 			},

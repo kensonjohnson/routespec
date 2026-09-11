@@ -43,8 +43,8 @@ func TestOpenAPIAnnotationsPopulateSchema(t *testing.T) {
 	api := annotationAPI(t)
 	api.RegisterFunc(http.MethodPost, "/annotated", annotationHandler, routespec.Operation{
 		ID:          "annotatedBody",
-		RequestBody: routespec.JSON[annotatedBody](),
-		Responses:   routespec.Responses{http.StatusOK: routespec.JSON[annotatedBody]()},
+		RequestBody: routespec.Request(routespec.JSON[annotatedBody]()),
+		Responses:   routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[annotatedBody]())},
 	})
 
 	schema := annotationSchema(t, api, "annotatedBody")
@@ -166,9 +166,9 @@ func TestOpenAPIAnnotationNameIsRejectedForJSONFields(t *testing.T) {
 			name: "request body",
 			operation: routespec.Operation{
 				ID: "invalidRequestName",
-				RequestBody: routespec.JSON[struct {
+				RequestBody: routespec.Request(routespec.JSON[struct {
 					Value string `json:"value" openapi:"name=renamed"`
-				}](),
+				}]()),
 				Responses: routespec.Responses{http.StatusOK: {}},
 			},
 		},
@@ -176,9 +176,9 @@ func TestOpenAPIAnnotationNameIsRejectedForJSONFields(t *testing.T) {
 			name: "response body",
 			operation: routespec.Operation{
 				ID: "invalidResponseName",
-				Responses: routespec.Responses{http.StatusOK: routespec.JSON[struct {
+				Responses: routespec.Responses{http.StatusOK: routespec.Respond(routespec.JSON[struct {
 					Value string `json:"value" openapi:"name=renamed"`
-				}]()},
+				}]())},
 			},
 		},
 	}
@@ -202,7 +202,7 @@ func TestOpenAPIInvalidAnnotationsPanicDuringRegistration(t *testing.T) {
 			register: func(api *routespec.API) {
 				api.RegisterFunc(http.MethodPost, "/invalid-annotation", annotationHandler, routespec.Operation{
 					ID:          "unknownAnnotation",
-					RequestBody: routespec.JSON[unknownAnnotation](),
+					RequestBody: routespec.Request(routespec.JSON[unknownAnnotation]()),
 					Responses:   routespec.Responses{http.StatusOK: {}},
 				})
 			},
@@ -212,7 +212,7 @@ func TestOpenAPIInvalidAnnotationsPanicDuringRegistration(t *testing.T) {
 			register: func(api *routespec.API) {
 				api.RegisterFunc(http.MethodPost, "/invalid-annotation", annotationHandler, routespec.Operation{
 					ID:          "stringConstraintOnInteger",
-					RequestBody: routespec.JSON[stringConstraintOnInteger](),
+					RequestBody: routespec.Request(routespec.JSON[stringConstraintOnInteger]()),
 					Responses:   routespec.Responses{http.StatusOK: {}},
 				})
 			},
@@ -222,7 +222,7 @@ func TestOpenAPIInvalidAnnotationsPanicDuringRegistration(t *testing.T) {
 			register: func(api *routespec.API) {
 				api.RegisterFunc(http.MethodPost, "/invalid-annotation", annotationHandler, routespec.Operation{
 					ID:          "numericConstraintOnString",
-					RequestBody: routespec.JSON[numericConstraintOnString](),
+					RequestBody: routespec.Request(routespec.JSON[numericConstraintOnString]()),
 					Responses:   routespec.Responses{http.StatusOK: {}},
 				})
 			},
