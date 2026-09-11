@@ -140,7 +140,7 @@ Routespec supports structs, nested and recursive named structs, booleans, number
 
 ## Schema overrides
 
-Use `WithSchemaOverride` for a shape tags cannot describe, such as a union:
+Use `WithSchemaOverride` for a shape tags cannot describe, such as a union or composed schema:
 
 ```go
 api := routespec.New(mux, info,
@@ -152,6 +152,8 @@ api := routespec.New(mux, info,
     }),
 )
 ```
+
+`Schema` also exposes `AllOf`, `AnyOf`, `Not`, and `Discriminator`. A discriminator requires `AllOf`, `AnyOf`, or `OneOf`, and its `PropertyName` must be a required property of the composed schema.
 
 ## Security
 

@@ -94,16 +94,15 @@ func (schema *Schema) UnmarshalJSON(data []byte) error {
 
 	if rawAnyOf, exists := object["anyOf"]; exists {
 		var alternatives []jsontext.Value
-		if err := json.Unmarshal(rawAnyOf, &alternatives); err != nil || len(object) != 1 || len(alternatives) != 2 || !isNullSchema(alternatives[1]) {
-			return fmt.Errorf("routespec: Schema cannot represent anyOf until composition support is enabled")
+		if err := json.Unmarshal(rawAnyOf, &alternatives); err == nil && len(object) == 1 && len(alternatives) == 2 && isNullSchema(alternatives[1]) {
+			var base Schema
+			if err := json.Unmarshal(alternatives[0], &base); err != nil {
+				return err
+			}
+			base.Nullable = true
+			*schema = base
+			return nil
 		}
-		var base Schema
-		if err := json.Unmarshal(alternatives[0], &base); err != nil {
-			return err
-		}
-		base.Nullable = true
-		*schema = base
-		return nil
 	}
 
 	transformed, err := json.Marshal(object, json.Deterministic(true))

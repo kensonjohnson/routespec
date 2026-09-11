@@ -1,6 +1,7 @@
 package routespec
 
 import (
+	"reflect"
 	"testing"
 
 	json "encoding/json/v2"
@@ -23,9 +24,12 @@ func TestSchemaUnmarshalAcceptsOpenAdditionalProperties(t *testing.T) {
 	}
 }
 
-func TestSchemaUnmarshalRejectsArbitraryAnyOf(t *testing.T) {
+func TestSchemaUnmarshalPreservesAnyOf(t *testing.T) {
 	var schema Schema
-	if err := json.Unmarshal([]byte(`{"anyOf":[{"type":"string"},{"type":"number"}]}`), &schema); err == nil {
-		t.Fatal("unmarshal succeeded for unsupported anyOf")
+	if err := json.Unmarshal([]byte(`{"anyOf":[{"type":"string"},{"type":"number"}]}`), &schema); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	if got, want := schema.AnyOf, []Schema{{Type: "string"}, {Type: "number"}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("anyOf = %#v, want %#v", got, want)
 	}
 }

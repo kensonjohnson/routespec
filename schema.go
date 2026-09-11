@@ -83,6 +83,109 @@ func buildDocument(info Info, operations map[routeKey]Operation, overrides map[r
 	return document
 }
 
+func validateSchemaCompositions(document Document) {
+	components := document.Components.Schemas
+	var validateSchema func(Schema)
+	validateSchema = func(schema Schema) {
+		validateCompositionAlternatives("allOf", schema.AllOf, validateSchema)
+		validateCompositionAlternatives("anyOf", schema.AnyOf, validateSchema)
+		validateCompositionAlternatives("oneOf", schema.OneOf, validateSchema)
+		if schema.Not != nil {
+			validateSchema(*schema.Not)
+		}
+		for _, property := range schema.Properties {
+			validateSchema(property)
+		}
+		if schema.Items != nil {
+			validateSchema(*schema.Items)
+		}
+		if schema.AdditionalProperties != nil {
+			validateSchema(*schema.AdditionalProperties)
+		}
+		if schema.Discriminator != nil {
+			validateDiscriminator(schema, components)
+		}
+	}
+
+	for _, schema := range components {
+		validateSchema(schema)
+	}
+	for _, pathItem := range document.Paths {
+		for _, operation := range []*DocumentOperation{pathItem.Get, pathItem.Put, pathItem.Post, pathItem.Delete, pathItem.Patch, pathItem.Head, pathItem.Options, pathItem.Trace} {
+			if operation == nil {
+				continue
+			}
+			for _, parameter := range operation.Parameters {
+				validateSchema(parameter.Schema)
+			}
+			if operation.RequestBody != nil {
+				for _, content := range operation.RequestBody.Content {
+					validateSchema(content.Schema)
+				}
+			}
+			for _, response := range operation.Responses {
+				for _, content := range response.Content {
+					validateSchema(content.Schema)
+				}
+			}
+		}
+	}
+}
+
+func validateCompositionAlternatives(name string, alternatives []Schema, validate func(Schema)) {
+	if alternatives == nil {
+		return
+	}
+	if len(alternatives) == 0 {
+		panic(fmt.Sprintf("routespec: %s requires at least one schema", name))
+	}
+	for _, alternative := range alternatives {
+		validate(alternative)
+	}
+}
+
+func validateDiscriminator(schema Schema, components map[string]Schema) {
+	discriminator := schema.Discriminator
+	if discriminator.PropertyName == "" {
+		panic("routespec: discriminator propertyName is required")
+	}
+	if len(schema.AllOf) == 0 && len(schema.AnyOf) == 0 && len(schema.OneOf) == 0 {
+		panic("routespec: discriminator requires allOf, anyOf, or oneOf")
+	}
+	for value, reference := range discriminator.Mapping {
+		if value == "" || reference == "" {
+			panic("routespec: discriminator mappings require non-empty values and references")
+		}
+	}
+	if !schemaRequiresProperty(schema, discriminator.PropertyName, components, make(map[string]bool)) {
+		panic(fmt.Sprintf("routespec: discriminator property %q must be required", discriminator.PropertyName))
+	}
+}
+
+func schemaRequiresProperty(schema Schema, property string, components map[string]Schema, visited map[string]bool) bool {
+	for _, required := range schema.Required {
+		if required == property {
+			return true
+		}
+	}
+	if strings.HasPrefix(schema.Ref, "#/components/schemas/") {
+		name := strings.TrimPrefix(schema.Ref, "#/components/schemas/")
+		if visited[name] {
+			return false
+		}
+		if component, exists := components[name]; exists {
+			visited[name] = true
+			return schemaRequiresProperty(component, property, components, visited)
+		}
+	}
+	for _, alternative := range schema.AllOf {
+		if schemaRequiresProperty(alternative, property, components, visited) {
+			return true
+		}
+	}
+	return false
+}
+
 type schemaState uint8
 
 const (

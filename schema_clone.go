@@ -19,7 +19,19 @@ func cloneSchema(schema Schema) Schema {
 	clone.Const = cloneSchemaValue(schema.Const)
 	clone.Default = cloneSchemaValue(schema.Default)
 	clone.Example = cloneSchemaValue(schema.Example)
+	clone.AllOf = cloneSchemas(schema.AllOf)
+	clone.AnyOf = cloneSchemas(schema.AnyOf)
 	clone.OneOf = cloneSchemas(schema.OneOf)
+	if schema.Not != nil {
+		not := cloneSchema(*schema.Not)
+		clone.Not = &not
+	}
+	if schema.Discriminator != nil {
+		clone.Discriminator = &Discriminator{
+			PropertyName: schema.Discriminator.PropertyName,
+			Mapping:      cloneStringMap(schema.Discriminator.Mapping),
+		}
+	}
 	clone.Properties = cloneSchemaProperties(schema.Properties)
 	clone.Required = append([]string(nil), schema.Required...)
 	if schema.Items != nil {
@@ -48,6 +60,17 @@ func cloneSchemas(schemas []Schema) []Schema {
 	clone := make([]Schema, len(schemas))
 	for index, schema := range schemas {
 		clone[index] = cloneSchema(schema)
+	}
+	return clone
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+	clone := make(map[string]string, len(values))
+	for key, value := range values {
+		clone[key] = value
 	}
 	return clone
 }

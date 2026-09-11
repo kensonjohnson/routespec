@@ -155,7 +155,8 @@ func validateDocument(method, path string, info Info, operations map[routeKey]Op
 		}
 	}()
 	validateOperationIDs(operations)
-	_ = buildDocument(info, operations, overrides)
+	document := buildDocument(info, operations, overrides)
+	validateSchemaCompositions(document)
 }
 
 func validateOperationIDs(operations map[routeKey]Operation) {
