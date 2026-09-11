@@ -2,7 +2,7 @@
 
 `routespec` registers routes with an existing Go router and generates an OpenAPI 3.1 document from explicit operation metadata and Go DTOs.
 
-It requires Go 1.27 or later. It does not parse or validate requests, provide middleware, discover existing routes, infer handler behavior, or generate clients.
+It requires Go 1.27 or later. The v0.1 release line supports Go 1.27. It does not parse or validate requests, provide middleware, discover existing routes, infer handler behavior, or generate clients.
 
 ## ServeMux
 
@@ -114,6 +114,28 @@ git diff --exit-code -- openapi.json
 ```
 
 Routespec does not provide an export CLI. The application owns route construction and chooses where its checked-in document lives.
+
+## Releases
+
+Routespec's first public release is `v0.1.0` under Apache-2.0. Public APIs may change in later `v0.x` minor releases. Patch releases remain backward-compatible. When practical, a replacement stays deprecated for one minor release before removal.
+
+Before tagging a release, update `CHANGELOG.md` and run:
+
+```sh
+./scripts/release-dry-run.sh
+```
+
+From `main`, run the `Release` workflow in GitHub Actions and provide a `v0.MINOR.PATCH` version such as `v0.1.0`. The workflow reruns the release checks, creates and pushes the tag for the selected commit, verifies a clean temporary consumer module against that tag, and creates GitHub release notes. The dry run also verifies a temporary consumer against the local source at the intended module version. To rerun that local check:
+
+```sh
+./scripts/verify-consumer.sh v0.1.0 "$PWD"
+```
+
+After publication, omit the local source to fetch the tagged module directly:
+
+```sh
+./scripts/verify-consumer.sh v0.1.0
+```
 
 ## Document metadata
 
