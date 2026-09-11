@@ -50,7 +50,7 @@ type Parameter struct {
 	Name        string `json:"name"`
 	In          string `json:"in"`
 	Description string `json:"description,omitempty"`
-	Required    bool   `json:"required,omitempty"`
+	Required    bool   `json:"required,omitzero"`
 	Schema      Schema `json:"schema"`
 }
 
@@ -75,22 +75,28 @@ type MediaType struct {
 type Schema struct {
 	Ref                  string            `json:"$ref,omitempty"`
 	Type                 string            `json:"type,omitempty"`
+	Nullable             bool              `json:"-"`
+	Closed               bool              `json:"-"`
 	Format               string            `json:"format,omitempty"`
 	Description          string            `json:"description,omitempty"`
 	Default              any               `json:"default,omitempty"`
 	Example              any               `json:"example,omitempty"`
 	Enum                 []any             `json:"enum,omitempty"`
-	ReadOnly             bool              `json:"readOnly,omitempty"`
-	WriteOnly            bool              `json:"writeOnly,omitempty"`
-	Deprecated           bool              `json:"deprecated,omitempty"`
+	Const                any               `json:"const,omitempty"`
+	ReadOnly             bool              `json:"readOnly,omitzero"`
+	WriteOnly            bool              `json:"writeOnly,omitzero"`
+	Deprecated           bool              `json:"deprecated,omitzero"`
 	MinLength            *int              `json:"minLength,omitempty"`
 	MaxLength            *int              `json:"maxLength,omitempty"`
 	Pattern              string            `json:"pattern,omitempty"`
 	Minimum              *float64          `json:"minimum,omitempty"`
 	Maximum              *float64          `json:"maximum,omitempty"`
+	ExclusiveMinimum     *float64          `json:"exclusiveMinimum,omitempty"`
+	ExclusiveMaximum     *float64          `json:"exclusiveMaximum,omitempty"`
 	MultipleOf           *float64          `json:"multipleOf,omitempty"`
 	MinItems             *int              `json:"minItems,omitempty"`
 	MaxItems             *int              `json:"maxItems,omitempty"`
+	UniqueItems          bool              `json:"uniqueItems,omitzero"`
 	MinProperties        *int              `json:"minProperties,omitempty"`
 	MaxProperties        *int              `json:"maxProperties,omitempty"`
 	OneOf                []Schema          `json:"oneOf,omitempty"`

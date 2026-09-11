@@ -7,8 +7,9 @@
 // DTO fields may use an openapi struct tag, for example
 // `openapi:"required,minLength=1,maxLength=100"`. The supported directives are
 // required, name, description, format, minLength, maxLength, pattern, minimum,
-// maximum, multipleOf, minItems, maxItems, minProperties, maxProperties, enum,
-// default, example, readOnly, writeOnly, and deprecated. Separate directives
+// maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, minItems, maxItems,
+// uniqueItems, minProperties, maxProperties, additionalProperties=false, enum,
+// const, default, example, readOnly, writeOnly, and deprecated. Separate directives
 // with commas. Escape commas, pipes, equals signs, and backslashes in values with
 // a backslash. The name directive only applies to Path and Query models; JSON
 // request and response fields always use their json tag name.

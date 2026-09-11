@@ -18,17 +18,22 @@ type annotation struct {
 	writeOnly   bool
 	deprecated  bool
 
-	minLength     *int
-	maxLength     *int
-	minimum       *float64
-	maximum       *float64
-	multipleOf    *float64
-	minItems      *int
-	maxItems      *int
-	minProperties *int
-	maxProperties *int
+	minLength        *int
+	maxLength        *int
+	minimum          *float64
+	maximum          *float64
+	exclusiveMinimum *float64
+	exclusiveMaximum *float64
+	multipleOf       *float64
+	minItems         *int
+	maxItems         *int
+	uniqueItems      bool
+	minProperties    *int
+	maxProperties    *int
+	closed           bool
 
 	enum       []string
+	constRaw   *string
 	defaultRaw *string
 	exampleRaw *string
 }
@@ -80,18 +85,33 @@ func parseAnnotation(field reflect.StructField) annotation {
 			result.minimum = annotationFloat(field, key, value, hasValue)
 		case "maximum":
 			result.maximum = annotationFloat(field, key, value, hasValue)
+		case "exclusiveMinimum":
+			result.exclusiveMinimum = annotationFloat(field, key, value, hasValue)
+		case "exclusiveMaximum":
+			result.exclusiveMaximum = annotationFloat(field, key, value, hasValue)
 		case "multipleOf":
 			result.multipleOf = annotationFloat(field, key, value, hasValue)
 		case "minItems":
 			result.minItems = annotationInt(field, key, value, hasValue)
 		case "maxItems":
 			result.maxItems = annotationInt(field, key, value, hasValue)
+		case "uniqueItems":
+			requireNoValue(field, key, hasValue)
+			result.uniqueItems = true
 		case "minProperties":
 			result.minProperties = annotationInt(field, key, value, hasValue)
 		case "maxProperties":
 			result.maxProperties = annotationInt(field, key, value, hasValue)
+		case "additionalProperties":
+			if requireValue(field, key, value, hasValue) != "false" {
+				annotationPanic(field, "additionalProperties only supports false")
+			}
+			result.closed = true
 		case "enum":
 			result.enum = splitTag(requireValue(field, key, value, hasValue), '|')
+		case "const":
+			constValue := requireValue(field, key, value, hasValue)
+			result.constRaw = &constValue
 		case "default":
 			defaultValue := requireValue(field, key, value, hasValue)
 			result.defaultRaw = &defaultValue
@@ -197,6 +217,14 @@ func unescapeTagValue(value string) string {
 	return result.String()
 }
 
+func (annotation annotation) hasTypeSpecificValues() bool {
+	return annotation.minLength != nil || annotation.maxLength != nil || annotation.pattern != "" ||
+		annotation.minimum != nil || annotation.maximum != nil || annotation.exclusiveMinimum != nil || annotation.exclusiveMaximum != nil || annotation.multipleOf != nil ||
+		annotation.minItems != nil || annotation.maxItems != nil || annotation.uniqueItems ||
+		annotation.minProperties != nil || annotation.maxProperties != nil || annotation.closed ||
+		len(annotation.enum) > 0 || annotation.constRaw != nil || annotation.defaultRaw != nil || annotation.exampleRaw != nil
+}
+
 func (annotation annotation) apply(schema Schema, field reflect.StructField, allowName bool) Schema {
 	kind := deref(field.Type).Kind()
 	if annotation.name != "" && !allowName {
@@ -207,21 +235,22 @@ func (annotation annotation) apply(schema Schema, field reflect.StructField, all
 			annotationPanic(field, "string constraints require a string field")
 		}
 	}
-	if annotation.minimum != nil || annotation.maximum != nil || annotation.multipleOf != nil {
+	if annotation.minimum != nil || annotation.maximum != nil || annotation.exclusiveMinimum != nil || annotation.exclusiveMaximum != nil || annotation.multipleOf != nil {
 		if !isNumber(kind) {
 			annotationPanic(field, "numeric constraints require a numeric field")
 		}
 	}
-	if annotation.minItems != nil || annotation.maxItems != nil {
+	if annotation.minItems != nil || annotation.maxItems != nil || annotation.uniqueItems {
 		if kind != reflect.Slice && kind != reflect.Array {
 			annotationPanic(field, "item constraints require an array or slice field")
 		}
 	}
-	if annotation.minProperties != nil || annotation.maxProperties != nil {
+	if annotation.minProperties != nil || annotation.maxProperties != nil || annotation.closed {
 		if kind != reflect.Map && kind != reflect.Struct {
 			annotationPanic(field, "property constraints require an object field")
 		}
 	}
+	validateAnnotationRanges(field, annotation)
 
 	if annotation.description != "" {
 		schema.Description = annotation.description
@@ -229,25 +258,66 @@ func (annotation annotation) apply(schema Schema, field reflect.StructField, all
 	if annotation.format != "" {
 		schema.Format = annotation.format
 	}
-	schema.ReadOnly = annotation.readOnly
-	schema.WriteOnly = annotation.writeOnly
-	schema.Deprecated = annotation.deprecated
-	schema.MinLength = annotation.minLength
-	schema.MaxLength = annotation.maxLength
-	schema.Pattern = annotation.pattern
-	schema.Minimum = annotation.minimum
-	schema.Maximum = annotation.maximum
-	schema.MultipleOf = annotation.multipleOf
-	schema.MinItems = annotation.minItems
-	schema.MaxItems = annotation.maxItems
-	schema.MinProperties = annotation.minProperties
-	schema.MaxProperties = annotation.maxProperties
+	if annotation.readOnly {
+		schema.ReadOnly = true
+	}
+	if annotation.writeOnly {
+		schema.WriteOnly = true
+	}
+	if annotation.deprecated {
+		schema.Deprecated = true
+	}
+	if annotation.minLength != nil {
+		schema.MinLength = annotation.minLength
+	}
+	if annotation.maxLength != nil {
+		schema.MaxLength = annotation.maxLength
+	}
+	if annotation.pattern != "" {
+		schema.Pattern = annotation.pattern
+	}
+	if annotation.minimum != nil {
+		schema.Minimum = annotation.minimum
+	}
+	if annotation.maximum != nil {
+		schema.Maximum = annotation.maximum
+	}
+	if annotation.exclusiveMinimum != nil {
+		schema.ExclusiveMinimum = annotation.exclusiveMinimum
+	}
+	if annotation.exclusiveMaximum != nil {
+		schema.ExclusiveMaximum = annotation.exclusiveMaximum
+	}
+	if annotation.multipleOf != nil {
+		schema.MultipleOf = annotation.multipleOf
+	}
+	if annotation.minItems != nil {
+		schema.MinItems = annotation.minItems
+	}
+	if annotation.maxItems != nil {
+		schema.MaxItems = annotation.maxItems
+	}
+	if annotation.uniqueItems {
+		schema.UniqueItems = true
+	}
+	if annotation.minProperties != nil {
+		schema.MinProperties = annotation.minProperties
+	}
+	if annotation.maxProperties != nil {
+		schema.MaxProperties = annotation.maxProperties
+	}
+	if annotation.closed {
+		schema.Closed = true
+	}
 
 	if len(annotation.enum) > 0 {
 		schema.Enum = make([]any, len(annotation.enum))
 		for index, raw := range annotation.enum {
 			schema.Enum[index] = parseTaggedValue(field, raw)
 		}
+	}
+	if annotation.constRaw != nil {
+		schema.Const = parseTaggedValue(field, *annotation.constRaw)
 	}
 	if annotation.defaultRaw != nil {
 		schema.Default = parseTaggedValue(field, *annotation.defaultRaw)
@@ -256,6 +326,26 @@ func (annotation annotation) apply(schema Schema, field reflect.StructField, all
 		schema.Example = parseTaggedValue(field, *annotation.exampleRaw)
 	}
 	return schema
+}
+
+func validateAnnotationRanges(field reflect.StructField, annotation annotation) {
+	for _, limits := range [][2]*int{
+		{annotation.minLength, annotation.maxLength},
+		{annotation.minItems, annotation.maxItems},
+		{annotation.minProperties, annotation.maxProperties},
+	} {
+		if limits[0] != nil && limits[1] != nil && *limits[0] > *limits[1] {
+			annotationPanic(field, "minimum constraint exceeds maximum constraint")
+		}
+	}
+	for _, limits := range [][2]*float64{
+		{annotation.minimum, annotation.maximum},
+		{annotation.exclusiveMinimum, annotation.exclusiveMaximum},
+	} {
+		if limits[0] != nil && limits[1] != nil && *limits[0] > *limits[1] {
+			annotationPanic(field, "minimum constraint exceeds maximum constraint")
+		}
+	}
 }
 
 func isNumber(kind reflect.Kind) bool {

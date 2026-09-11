@@ -2,7 +2,7 @@
 
 `routespec` registers routes with an existing Go router and generates an OpenAPI 3.1 document from explicit operation metadata and Go DTOs.
 
-It requires Go 1.22 or later. It does not parse or validate requests, provide middleware, discover existing routes, infer handler behavior, or generate clients.
+It requires Go 1.27 or later. It does not parse or validate requests, provide middleware, discover existing routes, infer handler behavior, or generate clients.
 
 ## ServeMux
 
@@ -130,13 +130,13 @@ type widgetQuery struct {
 }
 ```
 
-Supported `openapi` directives are `required`, `name`, `description`, `format`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `multipleOf`, `minItems`, `maxItems`, `minProperties`, `maxProperties`, `enum`, `default`, `example`, `readOnly`, `writeOnly`, and `deprecated`.
+Supported `openapi` directives are `required`, `name`, `description`, `format`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`, `minItems`, `maxItems`, `uniqueItems`, `minProperties`, `maxProperties`, `additionalProperties=false`, `enum`, `const`, `default`, `example`, `readOnly`, `writeOnly`, and `deprecated`.
 
 Separate directives with commas. Escape commas, pipes, equals signs, and backslashes in values with a backslash. `enum` values use `|` separators. `name` only applies to `Path` and `Query` models. Body and response fields always use their `json` name.
 
 Tags change only the generated document. They do not validate HTTP input. Conditional and cross-field rules remain application code.
 
-Routespec supports structs, nested and recursive named structs, booleans, numbers, strings, `time.Time`, slices, arrays, maps with string keys, and pointers. Pointers are dereferenced for schema generation. They do not currently advertise JSON `null`; use an override when clients must see that contract.
+Routespec supports structs, nested and recursive named structs, booleans, numbers, strings, `time.Time`, slices, arrays, maps with string keys, and pointers. Pointer fields emit an OpenAPI 3.1 schema that permits `null` unless `omitempty` or `omitzero` omits a nil pointer. Use `additionalProperties=false` on a struct field to close that object schema.
 
 ## Schema overrides
 

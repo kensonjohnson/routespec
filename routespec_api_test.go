@@ -1,7 +1,7 @@
 package routespec_test
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -35,6 +35,10 @@ type userResponse struct {
 	Profile    userProfile     `json:"profile"`
 	Next       *userResponse   `json:"next,omitempty"`
 	Ignored    string          `json:"-"`
+}
+
+type nullableUserResponse struct {
+	Next *nullableUserResponse `json:"next"`
 }
 
 type statefulHandler struct {
@@ -121,11 +125,31 @@ func TestRegisterAndDocument(t *testing.T) {
 	if got := userSchema.Properties["profile"].Ref; got != "#/components/schemas/userProfile" {
 		t.Fatalf("nested schema ref = %q", got)
 	}
-	if got := userSchema.Properties["next"].Ref; got != "#/components/schemas/userResponse" {
-		t.Fatalf("recursive schema ref = %q", got)
+	if next := userSchema.Properties["next"]; next.Ref != "#/components/schemas/userResponse" || next.Nullable {
+		t.Fatalf("omitempty recursive schema = %#v", next)
 	}
 	if _, exists := userSchema.Properties["Ignored"]; exists {
 		t.Fatal("json:- field appears in schema")
+	}
+}
+
+func TestDocumentJSONRoundTripPreservesSchemaExtensions(t *testing.T) {
+	api := routespec.New(http.NewServeMux(), routespec.Info{Title: "Example", Version: "1.0.0"})
+	api.RegisterFunc(http.MethodGet, "/users", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
+		ID:        "listUsers",
+		Responses: routespec.Responses{http.StatusOK: routespec.JSON[nullableUserResponse]()},
+	})
+
+	body, err := api.JSON()
+	if err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	var document routespec.Document
+	if err := json.Unmarshal(body, &document); err != nil {
+		t.Fatalf("unmarshal document: %v", err)
+	}
+	if next := document.Components.Schemas["nullableUserResponse"].Properties["next"]; next.Ref != "#/components/schemas/nullableUserResponse" || !next.Nullable {
+		t.Fatalf("round-trip nullable schema = %#v", next)
 	}
 }
 

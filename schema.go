@@ -1,15 +1,23 @@
 package routespec
 
 import (
+	"encoding"
+	json "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
-var timeType = reflect.TypeFor[time.Time]()
+var (
+	timeType            = reflect.TypeFor[time.Time]()
+	jsonMarshalerType   = reflect.TypeFor[json.Marshaler]()
+	jsonMarshalerToType = reflect.TypeFor[json.MarshalerTo]()
+	textMarshalerType   = reflect.TypeFor[encoding.TextMarshaler]()
+)
 
 func buildDocument(info Info, operations map[routeKey]Operation, overrides map[reflect.Type]Schema) Document {
 	builder := schemaBuilder{
@@ -175,7 +183,7 @@ func (builder *schemaBuilder) parameters(model ParameterModel) []Parameter {
 	parameters := make([]Parameter, 0, len(names))
 	for _, name := range names {
 		field := fields[name]
-		schema := field.Annotation.apply(builder.schema(field.Type), field.Field, true)
+		schema := builder.fieldSchema(field, true)
 		parameters = append(parameters, Parameter{
 			Name:        name,
 			In:          string(model.location),
@@ -187,10 +195,51 @@ func (builder *schemaBuilder) parameters(model ParameterModel) []Parameter {
 	return parameters
 }
 
+func (builder *schemaBuilder) fieldSchema(field jsonField, allowName bool) Schema {
+	schema := builder.schema(field.Type)
+	if field.Stringified {
+		if !isNumber(deref(field.Type).Kind()) {
+			annotationPanic(field.Field, "json string requires a numeric field")
+		}
+		if field.Annotation.hasTypeSpecificValues() {
+			annotationPanic(field.Field, "json string cannot be combined with schema constraints or values")
+		}
+		schema.Ref = ""
+		schema.Type = "string"
+		schema.Format = ""
+	}
+	if field.OmitNull {
+		schema.Nullable = false
+	}
+	return field.Annotation.apply(schema, field.Field, allowName)
+}
+
 func (builder *schemaBuilder) schema(t reflect.Type) Schema {
-	t = deref(t)
+	nullable := false
+	for t.Kind() == reflect.Pointer {
+		nullable = true
+		t = t.Elem()
+	}
+	if _, overridden := builder.overrides[t]; !overridden && t != timeType && hasCustomJSONEncoding(t) {
+		panic(fmt.Sprintf("routespec: schema type %s has custom JSON encoding; use WithSchemaOverride", t))
+	}
+	schema := builder.schemaValue(t)
+	schema.Nullable = schema.Nullable || nullable
+	return schema
+}
+
+func hasCustomJSONEncoding(t reflect.Type) bool {
+	for _, candidate := range []reflect.Type{t, reflect.PointerTo(t)} {
+		if candidate.Implements(jsonMarshalerType) || candidate.Implements(jsonMarshalerToType) || candidate.Implements(textMarshalerType) {
+			return true
+		}
+	}
+	return false
+}
+
+func (builder *schemaBuilder) schemaValue(t reflect.Type) Schema {
 	if override, exists := builder.overrides[t]; exists {
-		return override
+		return cloneSchema(override)
 	}
 	if t == timeType {
 		return Schema{Type: "string", Format: "date-time"}
@@ -251,7 +300,7 @@ func (builder *schemaBuilder) objectSchema(t reflect.Type) Schema {
 	properties := make(map[string]Schema, len(fields))
 	required := make([]string, 0)
 	for name, field := range fields {
-		properties[name] = field.Annotation.apply(builder.schema(field.Type), field.Field, false)
+		properties[name] = builder.fieldSchema(field, false)
 		if field.Annotation.required {
 			required = append(required, name)
 		}
@@ -279,38 +328,191 @@ func deref(t reflect.Type) reflect.Type {
 }
 
 type jsonField struct {
-	Field      reflect.StructField
-	Type       reflect.Type
-	Annotation annotation
+	Field       reflect.StructField
+	Type        reflect.Type
+	Annotation  annotation
+	Stringified bool
+	OmitNull    bool
+}
+
+type jsonFieldCandidate struct {
+	field       reflect.StructField
+	name        string
+	tagged      bool
+	index       []int
+	stringified bool
+	omitNull    bool
+}
+
+type jsonTag struct {
+	name        string
+	tagged      bool
+	ignored     bool
+	embedded    bool
+	stringified bool
+	omitNull    bool
+}
+
+type jsonFieldLevel struct {
+	typeOf reflect.Type
+	index  []int
 }
 
 func jsonFields(t reflect.Type) map[string]jsonField {
 	if t.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("routespec: expected struct, got %s", t))
 	}
+
+	candidates := make([]jsonFieldCandidate, 0)
+	current := []jsonFieldLevel{{typeOf: t}}
+	visited := make(map[reflect.Type]bool)
+	for len(current) > 0 {
+		next := make([]jsonFieldLevel, 0)
+		for _, level := range current {
+			if visited[level.typeOf] {
+				continue
+			}
+			visited[level.typeOf] = true
+			for i := 0; i < level.typeOf.NumField(); i++ {
+				field := level.typeOf.Field(i)
+				if !field.IsExported() {
+					if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
+						panic(fmt.Sprintf("routespec: unexported field %s in %s has a json tag", field.Name, level.typeOf))
+					}
+					continue
+				}
+				fieldType := deref(field.Type)
+
+				tag := parseJSONTag(field)
+				if tag.ignored {
+					continue
+				}
+				index := append(append([]int(nil), level.index...), i)
+				if tag.embedded || (tag.name == "" && field.Anonymous) {
+					if fieldType.Kind() != reflect.Struct {
+						panic(fmt.Sprintf("routespec: json embed on %s.%s requires a struct", level.typeOf, field.Name))
+					}
+					next = append(next, jsonFieldLevel{typeOf: fieldType, index: index})
+					continue
+				}
+				if tag.name == "" {
+					tag.name = field.Name
+				}
+				candidates = append(candidates, jsonFieldCandidate{
+					field:       field,
+					name:        tag.name,
+					tagged:      tag.tagged,
+					index:       index,
+					stringified: tag.stringified,
+					omitNull:    tag.omitNull,
+				})
+			}
+		}
+		current = next
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].name != candidates[j].name {
+			return candidates[i].name < candidates[j].name
+		}
+		if len(candidates[i].index) != len(candidates[j].index) {
+			return len(candidates[i].index) < len(candidates[j].index)
+		}
+		if candidates[i].tagged != candidates[j].tagged {
+			return candidates[i].tagged
+		}
+		for index := range candidates[i].index {
+			if candidates[i].index[index] != candidates[j].index[index] {
+				return candidates[i].index[index] < candidates[j].index[index]
+			}
+		}
+		return false
+	})
+
 	fields := make(map[string]jsonField)
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if !field.IsExported() {
-			continue
+	for start := 0; start < len(candidates); {
+		end := start + 1
+		for end < len(candidates) && candidates[end].name == candidates[start].name {
+			end++
 		}
-		name, _ := jsonName(field)
-		if name == "-" {
-			continue
+		candidate, ok := dominantJSONField(candidates[start:end])
+		if ok {
+			fields[candidate.name] = jsonField{
+				Field:       candidate.field,
+				Type:        candidate.field.Type,
+				Annotation:  parseAnnotation(candidate.field),
+				Stringified: candidate.stringified,
+				OmitNull:    candidate.omitNull,
+			}
 		}
-		if name == "" {
-			name = field.Name
-		}
-		if _, exists := fields[name]; exists {
-			panic(fmt.Sprintf("routespec: duplicate JSON field name %q in %s", name, t))
-		}
-		fields[name] = jsonField{
-			Field:      field,
-			Type:       field.Type,
-			Annotation: parseAnnotation(field),
-		}
+		start = end
+	}
+	if len(fields) == 0 && t.NumField() > 0 {
+		panic(fmt.Sprintf("routespec: %s has no JSON-representable fields", t))
 	}
 	return fields
+}
+
+func dominantJSONField(candidates []jsonFieldCandidate) (jsonFieldCandidate, bool) {
+	if len(candidates) == 0 {
+		return jsonFieldCandidate{}, false
+	}
+	if len(candidates) > 1 && len(candidates[0].index) == len(candidates[1].index) && candidates[0].tagged == candidates[1].tagged {
+		return jsonFieldCandidate{}, false
+	}
+	return candidates[0], true
+}
+
+func parseJSONTag(field reflect.StructField) jsonTag {
+	raw := field.Tag.Get("json")
+	if raw == "-" {
+		return jsonTag{ignored: true}
+	}
+	if raw == "" {
+		return jsonTag{}
+	}
+
+	parts := strings.Split(raw, ",")
+	tag := jsonTag{name: parts[0]}
+	if !isValidJSONTag(tag.name) {
+		tag.name = ""
+	}
+	tag.tagged = tag.name != ""
+	for _, option := range parts[1:] {
+		switch {
+		case option == "omitempty" || option == "omitzero":
+			tag.omitNull = true
+		case option == "string":
+			tag.stringified = true
+		case option == "embed":
+			tag.embedded = true
+		case option == "case:ignore" || option == "case:strict":
+			// Name matching only affects unmarshaling.
+		case strings.HasPrefix(option, "format:") && len(option) > len("format:"):
+			// Format affects runtime marshaling, not field selection.
+		default:
+			panic(fmt.Sprintf("routespec: unsupported json tag option %q on %s.%s", option, field.Type, field.Name))
+		}
+	}
+	if tag.embedded && (tag.name != "" || len(parts) != 2) {
+		panic(fmt.Sprintf("routespec: json embed on %s.%s cannot be combined with a name or other options", field.Type, field.Name))
+	}
+	return tag
+}
+
+func isValidJSONTag(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, character := range name {
+		if strings.ContainsRune("!#$%&()*+-./:<=>?@^_|~ ", character) {
+			continue
+		}
+		if !unicode.IsLetter(character) && !unicode.IsDigit(character) {
+			return false
+		}
+	}
+	return true
 }
 
 func parameterFields(t reflect.Type) map[string]jsonField {
@@ -327,15 +529,6 @@ func parameterFields(t reflect.Type) map[string]jsonField {
 		parameters[name] = field
 	}
 	return parameters
-}
-
-func jsonName(field reflect.StructField) (string, []string) {
-	tag := field.Tag.Get("json")
-	if tag == "" {
-		return "", nil
-	}
-	parts := strings.Split(tag, ",")
-	return parts[0], parts[1:]
 }
 
 func serveMuxPathParameters(path string) []string {

@@ -1,7 +1,8 @@
 package routespec
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -9,7 +10,7 @@ import (
 	"sync"
 )
 
-// API records operations registered on a Go 1.22+ http.ServeMux.
+// API records operations registered on a Go 1.27+ http.ServeMux.
 type API struct {
 	mux  *http.ServeMux
 	info Info
@@ -31,7 +32,7 @@ type Option func(*API)
 // It provides an escape hatch for schemas that field tags cannot express.
 func WithSchemaOverride[T any](schema Schema) Option {
 	return func(api *API) {
-		api.overrides[deref(typeOf[T]())] = schema
+		api.overrides[deref(typeOf[T]())] = cloneSchema(schema)
 	}
 }
 
@@ -111,6 +112,7 @@ func (api *API) RegisterFunc(method, path string, handler http.HandlerFunc, oper
 }
 
 func (api *API) register(method, path string, operation Operation, register func(pattern string)) {
+	operation = cloneOperation(operation)
 	validateOperation(method, path, operation)
 
 	key := routeKey{method: method, path: path}
@@ -135,13 +137,35 @@ func (api *API) register(method, path string, operation Operation, register func
 	api.operations[key] = operation
 }
 
+func cloneOperation(operation Operation) Operation {
+	clone := operation
+	clone.Tags = append([]string(nil), operation.Tags...)
+	clone.Security = cloneSecurity(operation.Security)
+	clone.Responses = make(Responses, len(operation.Responses))
+	for status, content := range operation.Responses {
+		clone.Responses[status] = content
+	}
+	return clone
+}
+
 func validateDocument(method, path string, info Info, operations map[routeKey]Operation, overrides map[reflect.Type]Schema) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			panicRoute(method, path, fmt.Sprint(recovered))
 		}
 	}()
+	validateOperationIDs(operations)
 	_ = buildDocument(info, operations, overrides)
+}
+
+func validateOperationIDs(operations map[routeKey]Operation) {
+	seen := make(map[string]routeKey, len(operations))
+	for key, operation := range operations {
+		if previous, exists := seen[operation.ID]; exists {
+			panic(fmt.Sprintf("operation ID %q is used by both %s %s and %s %s", operation.ID, previous.method, previous.path, key.method, key.path))
+		}
+		seen[operation.ID] = key
+	}
 }
 
 func registerWithContext(method, path string, register func()) {
@@ -252,7 +276,7 @@ func (api *API) Document() Document {
 
 // JSON returns a pretty-printed OpenAPI document followed by a newline.
 func (api *API) JSON() ([]byte, error) {
-	jsonDocument, err := json.MarshalIndent(api.Document(), "", "\t")
+	jsonDocument, err := json.Marshal(api.Document(), json.Deterministic(true), jsontext.WithIndent("\t"))
 	if err != nil {
 		return nil, fmt.Errorf("marshal OpenAPI document: %w", err)
 	}

@@ -1,7 +1,7 @@
 package routespec_test
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"reflect"
 	"testing"
