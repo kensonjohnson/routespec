@@ -119,7 +119,7 @@ Routespec does not provide an export CLI. The application owns route constructio
 
 Routespec's first public release is `v0.1.0` under Apache-2.0. Public APIs may change in later `v0.x` minor releases. Patch releases remain backward-compatible. When practical, a replacement stays deprecated for one minor release before removal.
 
-Before releasing, move the notes out of `Unreleased` under a `## 0.1.0` heading in `CHANGELOG.md`, then run:
+Before releasing, run:
 
 ```sh
 RELEASE_VERSION=v0.1.0 ./scripts/release-dry-run.sh
