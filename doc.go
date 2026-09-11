@@ -16,6 +16,8 @@
 //
 // Use RequestSpec and ResponseSpec to declare bodies and responses explicitly.
 // Content helpers cover JSON, text, binary, form, multipart, and custom media types.
+// Info declares document metadata including servers, tags, external documentation,
+// contact, license, and supported security schemes.
 //
 // WithSchemaOverride provides an explicit schema for types that tags cannot
 // describe, such as union schemas.

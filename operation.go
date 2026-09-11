@@ -2,22 +2,87 @@ package routespec
 
 import "reflect"
 
-// Info describes an API document.
+// Info describes an API document and its top-level OpenAPI metadata.
 type Info struct {
 	Title           string
 	Version         string
 	Description     string
+	TermsOfService  string
+	Contact         *Contact
+	License         *License
+	Servers         []Server
+	Tags            []Tag
+	ExternalDocs    *ExternalDocs
 	SecuritySchemes map[string]SecurityScheme
+}
+
+// Contact describes an API contact.
+type Contact struct {
+	Name  string `json:"name,omitempty"`
+	URL   string `json:"url,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
+// License describes an API license. Identifier and URL are mutually exclusive.
+type License struct {
+	Name       string `json:"name"`
+	Identifier string `json:"identifier,omitempty"`
+	URL        string `json:"url,omitempty"`
+}
+
+// ExternalDocs links to external API documentation.
+type ExternalDocs struct {
+	Description string `json:"description,omitempty"`
+	URL         string `json:"url"`
+}
+
+// Server describes one API server.
+type Server struct {
+	URL         string                    `json:"url"`
+	Description string                    `json:"description,omitempty"`
+	Variables   map[string]ServerVariable `json:"variables,omitempty"`
+}
+
+// ServerVariable describes a templated server URL variable.
+type ServerVariable struct {
+	Enum        []string `json:"enum,omitempty"`
+	Default     string   `json:"default"`
+	Description string   `json:"description,omitempty"`
+}
+
+// Tag describes a reusable OpenAPI tag.
+type Tag struct {
+	Name         string        `json:"name"`
+	Description  string        `json:"description,omitempty"`
+	ExternalDocs *ExternalDocs `json:"externalDocs,omitempty"`
 }
 
 // SecurityScheme describes a reusable OpenAPI security scheme.
 type SecurityScheme struct {
-	Type         string `json:"type"`
-	Description  string `json:"description,omitempty"`
-	Name         string `json:"name,omitempty"`
-	In           string `json:"in,omitempty"`
-	Scheme       string `json:"scheme,omitempty"`
-	BearerFormat string `json:"bearerFormat,omitempty"`
+	Type             string      `json:"type"`
+	Description      string      `json:"description,omitempty"`
+	Name             string      `json:"name,omitempty"`
+	In               string      `json:"in,omitempty"`
+	Scheme           string      `json:"scheme,omitempty"`
+	BearerFormat     string      `json:"bearerFormat,omitempty"`
+	Flows            *OAuthFlows `json:"flows,omitempty"`
+	OpenIDConnectURL string      `json:"openIdConnectUrl,omitempty"`
+}
+
+// OAuthFlows describes OAuth 2.0 security flows.
+type OAuthFlows struct {
+	Implicit          *OAuthFlow `json:"implicit,omitempty"`
+	Password          *OAuthFlow `json:"password,omitempty"`
+	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty"`
+	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty"`
+}
+
+// OAuthFlow describes one OAuth 2.0 flow.
+type OAuthFlow struct {
+	AuthorizationURL string            `json:"authorizationUrl,omitempty"`
+	TokenURL         string            `json:"tokenUrl,omitempty"`
+	RefreshURL       string            `json:"refreshUrl,omitempty"`
+	Scopes           map[string]string `json:"scopes"`
 }
 
 // Operation describes one HTTP operation. Its request, parameters, and

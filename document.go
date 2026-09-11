@@ -2,17 +2,23 @@ package routespec
 
 // Document is the generated OpenAPI document.
 type Document struct {
-	OpenAPI    string              `json:"openapi"`
-	Info       DocumentInfo        `json:"info"`
-	Paths      map[string]PathItem `json:"paths"`
-	Components Components          `json:"components,omitempty"`
+	OpenAPI      string              `json:"openapi"`
+	Info         DocumentInfo        `json:"info"`
+	Servers      []Server            `json:"servers,omitempty"`
+	Paths        map[string]PathItem `json:"paths"`
+	Tags         []Tag               `json:"tags,omitempty"`
+	ExternalDocs *ExternalDocs       `json:"externalDocs,omitempty"`
+	Components   Components          `json:"components,omitempty"`
 }
 
 // DocumentInfo contains the OpenAPI info object.
 type DocumentInfo struct {
-	Title       string `json:"title"`
-	Version     string `json:"version"`
-	Description string `json:"description,omitempty"`
+	Title          string   `json:"title"`
+	Version        string   `json:"version"`
+	Description    string   `json:"description,omitempty"`
+	TermsOfService string   `json:"termsOfService,omitempty"`
+	Contact        *Contact `json:"contact,omitempty"`
+	License        *License `json:"license,omitempty"`
 }
 
 // Components holds reusable schemas.

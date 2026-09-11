@@ -19,6 +19,7 @@ var (
 	textMarshalerType   = reflect.TypeFor[encoding.TextMarshaler]()
 )
 
+// buildDocument materializes the current explicit route declarations.
 func buildDocument(info Info, operations map[routeKey]Operation, overrides map[reflect.Type]Schema) Document {
 	builder := schemaBuilder{
 		components: make(map[string]Schema),
@@ -30,11 +31,17 @@ func buildDocument(info Info, operations map[routeKey]Operation, overrides map[r
 	document := Document{
 		OpenAPI: "3.1.0",
 		Info: DocumentInfo{
-			Title:       info.Title,
-			Version:     info.Version,
-			Description: info.Description,
+			Title:          info.Title,
+			Version:        info.Version,
+			Description:    info.Description,
+			TermsOfService: info.TermsOfService,
+			Contact:        cloneContact(info.Contact),
+			License:        cloneLicense(info.License),
 		},
-		Paths: make(map[string]PathItem),
+		Servers:      cloneServers(info.Servers),
+		Tags:         cloneTags(info.Tags),
+		ExternalDocs: cloneExternalDocs(info.ExternalDocs),
+		Paths:        make(map[string]PathItem),
 		Components: Components{
 			SecuritySchemes: cloneSecuritySchemes(info.SecuritySchemes),
 		},
@@ -300,13 +307,42 @@ func documentLinks(links map[string]LinkSpec) map[string]Link {
 func validateSecurityRequirements(info Info, operations map[routeKey]Operation) {
 	for key, operation := range operations {
 		for _, requirement := range operation.Security {
-			for name := range requirement {
-				if _, exists := info.SecuritySchemes[name]; !exists {
+			for name, scopes := range requirement {
+				scheme, exists := info.SecuritySchemes[name]
+				if !exists {
 					panic(fmt.Sprintf("routespec: register %s %s: security scheme %q is not configured", key.method, key.path, name))
+				}
+				if scheme.Type != "oauth2" {
+					if len(scopes) > 0 {
+						panic(fmt.Sprintf("routespec: register %s %s: security scheme %q does not support scopes", key.method, key.path, name))
+					}
+					continue
+				}
+				available := oauthScopes(scheme.Flows)
+				for _, scope := range scopes {
+					if _, exists := available[scope]; !exists {
+						panic(fmt.Sprintf("routespec: register %s %s: security scheme %q does not define scope %q", key.method, key.path, name, scope))
+					}
 				}
 			}
 		}
 	}
+}
+
+func oauthScopes(flows *OAuthFlows) map[string]struct{} {
+	scopes := make(map[string]struct{})
+	if flows == nil {
+		return scopes
+	}
+	for _, flow := range []*OAuthFlow{flows.Implicit, flows.Password, flows.ClientCredentials, flows.AuthorizationCode} {
+		if flow == nil {
+			continue
+		}
+		for scope := range flow.Scopes {
+			scopes[scope] = struct{}{}
+		}
+	}
+	return scopes
 }
 
 func cloneSecuritySchemes(source map[string]SecurityScheme) map[string]SecurityScheme {
@@ -315,7 +351,7 @@ func cloneSecuritySchemes(source map[string]SecurityScheme) map[string]SecurityS
 	}
 	result := make(map[string]SecurityScheme, len(source))
 	for name, scheme := range source {
-		result[name] = scheme
+		result[name] = cloneSecurityScheme(scheme)
 	}
 	return result
 }

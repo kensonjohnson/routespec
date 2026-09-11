@@ -3,8 +3,31 @@
 	"info": {
 		"title": "Contract API",
 		"version": "1.0.0",
-		"description": "A stable public contract fixture."
+		"description": "A stable public contract fixture.",
+		"termsOfService": "https://example.com/terms",
+		"contact": {
+			"name": "Contract team",
+			"email": "api@example.com"
+		},
+		"license": {
+			"name": "Apache 2.0",
+			"identifier": "Apache-2.0"
+		}
 	},
+	"servers": [
+		{
+			"url": "https://{environment}.example.com/v1",
+			"variables": {
+				"environment": {
+					"enum": [
+						"api",
+						"staging"
+					],
+					"default": "api"
+				}
+			}
+		}
+	],
 	"paths": {
 		"/widgets/{id}": {
 			"post": {
@@ -62,6 +85,11 @@
 									"$ref": "#/components/schemas/publicContractResponse"
 								}
 							}
+						},
+						"links": {
+							"self": {
+								"operationId": "updateWidget"
+							}
 						}
 					},
 					"400": {
@@ -77,6 +105,19 @@
 				}
 			}
 		}
+	},
+	"tags": [
+		{
+			"name": "widgets",
+			"description": "Widget operations.",
+			"externalDocs": {
+				"url": "https://example.com/docs/widgets"
+			}
+		}
+	],
+	"externalDocs": {
+		"description": "Integration guide.",
+		"url": "https://example.com/docs"
 	},
 	"components": {
 		"schemas": {
@@ -121,10 +162,34 @@
 			}
 		},
 		"securitySchemes": {
+			"apiKeyAuth": {
+				"type": "apiKey",
+				"name": "X-API-Key",
+				"in": "header"
+			},
 			"bearerAuth": {
 				"type": "http",
 				"scheme": "bearer",
 				"bearerFormat": "JWT"
+			},
+			"mtlsAuth": {
+				"type": "mutualTLS"
+			},
+			"oauthAuth": {
+				"type": "oauth2",
+				"flows": {
+					"authorizationCode": {
+						"authorizationUrl": "https://example.com/authorize",
+						"tokenUrl": "https://example.com/token",
+						"scopes": {
+							"widgets:write": "Update widgets"
+						}
+					}
+				}
+			},
+			"oidcAuth": {
+				"type": "openIdConnect",
+				"openIdConnectUrl": "https://example.com/.well-known/openid-configuration"
 			}
 		}
 	}

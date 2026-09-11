@@ -54,7 +54,13 @@ func TestRegisterCopiesCallerOwnedOperationData(t *testing.T) {
 		Title:   "Example",
 		Version: "1.0.0",
 		SecuritySchemes: map[string]routespec.SecurityScheme{
-			"auth":      {Type: "http", Scheme: "bearer"},
+			"auth": {
+				Type: "oauth2",
+				Flows: &routespec.OAuthFlows{ClientCredentials: &routespec.OAuthFlow{
+					TokenURL: "https://example.com/token",
+					Scopes:   map[string]string{"read": "Read", "write": "Write"},
+				}},
+			},
 			"secondary": {Type: "http", Scheme: "bearer"},
 		},
 	})

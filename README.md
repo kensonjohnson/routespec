@@ -115,6 +115,24 @@ git diff --exit-code -- openapi.json
 
 Routespec does not provide an export CLI. The application owns route construction and chooses where its checked-in document lives.
 
+## Document metadata
+
+`Info` declares OpenAPI document metadata: terms of service, contact, license, servers, tags, external docs, and security schemes. Supported security schemes are `apiKey`, `http`, `mutualTLS`, `oauth2`, and `openIdConnect`; use `OAuthFlows` and `OAuthFlow` for OAuth 2.0.
+
+```go
+routespec.Info{
+    Title:   "Widgets API",
+    Version: "1.0.0",
+    Servers: []routespec.Server{{URL: "https://api.example.com/v1"}},
+    Tags:    []routespec.Tag{{Name: "widgets"}},
+    SecuritySchemes: map[string]routespec.SecurityScheme{
+        "bearerAuth": {Type: "http", Scheme: "bearer"},
+    },
+}
+```
+
+Internal schema references, discriminator mappings, link operation IDs and local operation references, and security scheme names/scopes are checked during route registration.
+
 ## DTOs and annotations
 
 `json` tags determine body and response property names. `Path[T]`, `Query[T]`, `Header[T]`, and `Cookie[T]` use the same names by default.

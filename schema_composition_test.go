@@ -96,8 +96,8 @@ func TestWithSchemaOverrideSupportsDiscriminatedUnion(t *testing.T) {
 	wantDiscriminator := map[string]any{
 		"propertyName": "kind",
 		"mapping": map[string]any{
-			"cat": "#/components/schemas/Cat",
-			"dog": "#/components/schemas/Dog",
+			"cat": "https://example.com/schemas/Cat",
+			"dog": "https://example.com/schemas/Dog",
 		},
 	}
 	if got := schema["discriminator"]; !reflect.DeepEqual(got, wantDiscriminator) {
@@ -172,8 +172,8 @@ func discriminatedUnionSchema(requireKind bool) routespec.Schema {
 		Discriminator: &routespec.Discriminator{
 			PropertyName: "kind",
 			Mapping: map[string]string{
-				"cat": "#/components/schemas/Cat",
-				"dog": "#/components/schemas/Dog",
+				"cat": "https://example.com/schemas/Cat",
+				"dog": "https://example.com/schemas/Dog",
 			},
 		},
 	}

@@ -84,11 +84,35 @@ func TestUndeclaredSecuritySchemePanicsDuringRegistration(t *testing.T) {
 func newPublicContractAPI() *routespec.API {
 	mux := http.NewServeMux()
 	api := routespec.New(mux, routespec.Info{
-		Title:       "Contract API",
-		Version:     "1.0.0",
-		Description: "A stable public contract fixture.",
+		Title:          "Contract API",
+		Version:        "1.0.0",
+		Description:    "A stable public contract fixture.",
+		TermsOfService: "https://example.com/terms",
+		Contact:        &routespec.Contact{Name: "Contract team", Email: "api@example.com"},
+		License:        &routespec.License{Name: "Apache 2.0", Identifier: "Apache-2.0"},
+		Servers: []routespec.Server{{
+			URL:       "https://{environment}.example.com/v1",
+			Variables: map[string]routespec.ServerVariable{"environment": {Enum: []string{"api", "staging"}, Default: "api"}},
+		}},
+		Tags: []routespec.Tag{{
+			Name:         "widgets",
+			Description:  "Widget operations.",
+			ExternalDocs: &routespec.ExternalDocs{URL: "https://example.com/docs/widgets"},
+		}},
+		ExternalDocs: &routespec.ExternalDocs{Description: "Integration guide.", URL: "https://example.com/docs"},
 		SecuritySchemes: map[string]routespec.SecurityScheme{
+			"apiKeyAuth": {Type: "apiKey", Name: "X-API-Key", In: "header"},
 			"bearerAuth": {Type: "http", Scheme: "bearer", BearerFormat: "JWT"},
+			"mtlsAuth":   {Type: "mutualTLS"},
+			"oauthAuth": {
+				Type: "oauth2",
+				Flows: &routespec.OAuthFlows{AuthorizationCode: &routespec.OAuthFlow{
+					AuthorizationURL: "https://example.com/authorize",
+					TokenURL:         "https://example.com/token",
+					Scopes:           map[string]string{"widgets:write": "Update widgets"},
+				}},
+			},
+			"oidcAuth": {Type: "openIdConnect", OpenIDConnectURL: "https://example.com/.well-known/openid-configuration"},
 		},
 	})
 	api.RegisterFunc(http.MethodPost, "/widgets/{id}", func(http.ResponseWriter, *http.Request) {}, routespec.Operation{
@@ -101,7 +125,10 @@ func newPublicContractAPI() *routespec.API {
 		Query:       routespec.Query[publicContractQuery](),
 		RequestBody: routespec.Request(routespec.JSON[publicContractRequest]()),
 		Responses: routespec.Responses{
-			http.StatusOK:         routespec.Respond(routespec.JSON[publicContractResponse]()),
+			http.StatusOK: {
+				Content: []routespec.Content{routespec.JSON[publicContractResponse]()},
+				Links:   map[string]routespec.LinkSpec{"self": {OperationID: "updateWidget"}},
+			},
 			http.StatusBadRequest: routespec.Respond(routespec.JSON[publicContractProblem]()),
 		},
 	})

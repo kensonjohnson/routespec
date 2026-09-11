@@ -48,30 +48,17 @@ func New(mux *http.ServeMux, info Info, options ...Option) *API {
 
 func cloneInfo(info Info) Info {
 	clone := info
-	if len(info.SecuritySchemes) > 0 {
-		clone.SecuritySchemes = make(map[string]SecurityScheme, len(info.SecuritySchemes))
-		for name, scheme := range info.SecuritySchemes {
-			clone.SecuritySchemes[name] = scheme
-		}
-	}
+	clone.Contact = cloneContact(info.Contact)
+	clone.License = cloneLicense(info.License)
+	clone.Servers = cloneServers(info.Servers)
+	clone.Tags = cloneTags(info.Tags)
+	clone.ExternalDocs = cloneExternalDocs(info.ExternalDocs)
+	clone.SecuritySchemes = cloneSecuritySchemes(info.SecuritySchemes)
 	return clone
 }
 
 func newAPI(info Info, options ...Option) *API {
-	if info.Title == "" {
-		panic("routespec: document title is required")
-	}
-	if info.Version == "" {
-		panic("routespec: document version is required")
-	}
-	for name, scheme := range info.SecuritySchemes {
-		if name == "" {
-			panic("routespec: security scheme name is required")
-		}
-		if scheme.Type == "" {
-			panic(fmt.Sprintf("routespec: security scheme %q type is required", name))
-		}
-	}
+	validateInfo(info)
 
 	api := &API{
 		info:       cloneInfo(info),
@@ -198,6 +185,7 @@ func validateDocument(method, path string, info Info, operations map[routeKey]Op
 	validateOperationIDs(operations)
 	document := buildDocument(info, operations, overrides)
 	validateSchemaCompositions(document)
+	validateDocumentReferences(document)
 }
 
 func validateOperationIDs(operations map[routeKey]Operation) {
